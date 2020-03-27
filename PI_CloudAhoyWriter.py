@@ -1,5 +1,5 @@
 """
-CloudAhoy Writer
+CloudAhoy Writer, by Adrian Velicu
 """
 
 from XPLMDefs import *
@@ -7,7 +7,6 @@ from XPLMProcessing import *
 from XPLMDataAccess import *
 from XPLMUtilities import *
 from XPLMMenus import *
-
 
 import datetime
 import time
@@ -17,37 +16,30 @@ from collections import OrderedDict
 FLUSH_INTERVAL_SECS = 5
 LOG_INTERVAL_SECS = 0.3
 
-
-# todo: change to ordereddict
+IDENTITY = lambda x: x
 DATAREF_MAP = OrderedDict([
-	("seconds/t", "sim/time/total_flight_time_sec"),
-	("degrees/LAT", "sim/flightmodel/position/latitude"),
-	("degrees/LON", "sim/flightmodel/position/longitude"),
-# dataref is in meters
-	("feet/ALT (GPS)", lambda: int(XPLMGetDataf(XPLMFindDataRef("sim/flightmodel/position/elevation")) * 3.2)),
-	("degrees/HDG","sim/flightmodel/position/mag_psi"),
-	("degrees/Pitch","sim/flightmodel/position/true_theta"),
-	("degrees/Roll","sim/flightmodel/position/true_phi"),
-	("degrees/Yaw","sim/flightmodel/position/beta"),
-	("degrees/WndDr","sim/weather/wind_direction_degt"),
-# Quoting from docs: "WARNING: this dataref is in meters/second - the dataref NAME has a bug."
-#lambda: XPLMGetDataf(XPLMFindDataRef("sim/weather/wind_speed_kt")) * 197
-	("knots/WndSpd",lambda: int(XPLMGetDataf(XPLMFindDataRef("sim/weather/wind_speed_kt")))),
-#	("fpm/VS","sim/cockpit2/gauges/indicators/vvi_fpm_pilot"),
-# doesn't seem to work, maybe cloudahoy is expecting the barometric pressure?
-#	("feet/ALT (baro)",lambda: int(XPLMGetDataf(XPLMFindDataRef("sim/flightmodel/misc/h_ind")))),
-# TODO: needs conversion from dots to fraction of full scale deflection
-#	("fsd/HCDI","sim/cockpit2/radios/indicators/nav1_hdef_dots_pilot"),
-#	("fsd/VCDI","sim/cockpit2/radios/indicators/nav1_vdef_dots_pilot"),
-	("knots/IAS","sim/flightmodel/position/indicated_airspeed2"),
-# in meters/second
-	("knots/GS",lambda: XPLMGetDataf(XPLMFindDataRef("sim/flightmodel/position/groundspeed"))*1.94),
-	("knots/TAS","sim/cockpit2/gauges/indicators/true_airspeed_kts_pilot"),	
+	("seconds/t", ("sim/time/total_flight_time_sec", IDENTITY)),
+	("degrees/LAT", ("sim/flightmodel/position/latitude", IDENTITY)),
+	("degrees/LON", ("sim/flightmodel/position/longitude", IDENTITY)),
+	("feet/ALT (GPS)", ("sim/flightmodel/position/elevation", lambda v: v*3.2)), # in meters
+	("degrees/HDG", ("sim/flightmodel/position/mag_psi", IDENTITY)),
+	("degrees/Pitch", ("sim/flightmodel/position/true_theta", IDENTITY)),
+	("degrees/Roll", ("sim/flightmodel/position/true_phi", IDENTITY)),
+	("degrees/Yaw", ("sim/flightmodel/position/beta", IDENTITY)),
+	("degrees/WndDr", ("sim/weather/wind_direction_degt", IDENTITY)),
+# Docs say: "WARNING: this dataref is in meters/second - the dataref NAME has a bug."
+#  .. but they seem to be lying
+	("knots/WndSpd", ("sim/weather/wind_speed_kt", IDENTITY)),
+	("ft Baro/AltB", ("sim/flightmodel/misc/h_ind", IDENTITY)),
+	("knots/IAS", ("sim/flightmodel/position/indicated_airspeed2", IDENTITY)),
+	("knots/GS", ("sim/flightmodel/position/groundspeed", lambda v: v*1.94)), # in meters/second
+	("knots/TAS", ("sim/cockpit2/gauges/indicators/true_airspeed_kts_pilot", IDENTITY)),
 ])
 
 class PythonInterface:
 	def XPluginStart(self):
 		self.IsLogging = False
+		self.InitDatarefs()
 		self.MenuSetup()
 		self.StartLogging()
 		return (
@@ -88,6 +80,13 @@ class PythonInterface:
 			self.StopLogging()
 			self.StartLogging()
 
+	def InitDatarefs(self):
+		self.datarefs = {}
+		for column_name, (dataref_name, _) in DATAREF_MAP.items():
+			self.datarefs[dataref_name] = XPLMFindDataRef(dataref_name)
+		self.elapsed_time_dataref = XPLMFindDataRef("sim/time/total_flight_time_sec")
+		self.paused_dataref = XPLMFindDataRef("sim/time/paused")
+
 	def StartLogging(self):
 		if self.IsLogging:
 			return
@@ -99,10 +98,11 @@ class PythonInterface:
 		self.OutputFile = open(self.OutputPath, 'w')
 		self.LastFlushed = 0
 		self.LastLogged = 0
+		self.PauseFrameProcessed = False
 		self.WriteMetadata()
 		self.FLCB = self.FlightLoopCallback
+		XPLMSpeakString("CloudAhoy: started logging")
 		XPLMRegisterFlightLoopCallback(self, self.FLCB, LOG_INTERVAL_SECS, 0)
-		XPLMSpeakString("CloudAhoy: started logging, output in %s" % self.OutputPath)
 		
 	def StopLogging(self, flightGivenName = None):
 		if not self.IsLogging:
@@ -114,49 +114,61 @@ class PythonInterface:
 		if flightGivenName:
 			finalPath = self.__MakePathForFilename(flightGivenName)
 			os.rename(self.OutputPath, finalPath)
-		
-		XPLMSpeakString("CloudAhoy: finished logging, output in %s" % finalPath)
-		
+			
 		self.FLCB = None
 		self.OutputPath = None
 		self.OutputFile = None
 		self.IsLogging = False
+		XPLMSpeakString("CloudAhoy: stopped logging")
 
 	def WriteMetadata(self):
 		self.OutputFile.write("Metadata,CA_CSV.3\n")
 		self.OutputFile.write("GMT,%s\n" % int(time.time()))
 		self.OutputFile.write("TAIL,X56433\n") # todo: ui to set tail number
+		self.OutputFile.write("GPS,XPlane\n")
+		self.OutputFile.write("ISSIM,1\n")
 		self.OutputFile.write("DATA,\n")
-		self.OutputFile.write("%s\n" % ",".join([column_name for (column_name, _) in DATAREF_MAP.items()]))
+		self.OutputFile.write("%s\n" % ",".join([column_name for (column_name, (_, _)) in DATAREF_MAP.items()]))
 
 	def FlightLoopCallback(self, elapsedMe, elapsedSim, counter, refcon):
-		elapsed = XPLMGetDataf(XPLMFindDataRef("sim/time/total_flight_time_sec"))
+		elapsed = XPLMGetDataf(self.elapsed_time_dataref)
+		paused = XPLMGetDataf(self.paused_dataref)
 		
-		if int(elapsed / FLUSH_INTERVAL_SECS) > int(self.LastFlushed / FLUSH_INTERVAL_SECS):
+		# Detect if we've already processed exactly one paused frame, and we are still paused
+		if self.PauseFrameProcessed and paused:
+			# Nothing to log or flush, just call us back later
+			return LOG_INTERVAL_SECS
+		
+		# Detect world resets - when the world resets, elapsed resets, so it is extremely likely
+		# it will be less than the last elapsed time logged
+		if elapsed < self.LastLogged:
+			self.StopLogging()
+			self.StartLogging()
+			return 0 # Stop getting callbacks; StartLogging will have registered a new flight loop function.
+		
+		# Log this frame
+		framevals = []
+		for _, (dataref_name, transform_fun) in DATAREF_MAP.items():
+			dataref = self.datarefs[dataref_name]
+			raw_value = XPLMGetDataf(dataref)
+			real_value = transform_fun(raw_value)
+			framevals.append(str(real_value))
+		self.OutputFile.write(",".join(framevals) + "\n")
+		self.LastLogged = elapsed
+		
+		# Flush the output file if:
+		#   .. more than FLUSH_INTERVAL_SECS of _game time_ have passed, OR
+		#   .. we are paused (only one frame will be logged when paused, as this method will return early on
+		#      every other frame except the first)
+		if (int(elapsed / FLUSH_INTERVAL_SECS) > int(self.LastFlushed / FLUSH_INTERVAL_SECS)) or paused:
 			self.LastFlushed = elapsed
 			self.OutputFile.flush()
-
-		#if elapsed < self.LastLogged:
-		#	# flight was reset
-		#	StopLogging()
-		#	return LOG_INTERVAL_SECS
 		
-		self.LastLogged = elapsed
-		#paused = XPLMGetDatab(XPLMFindDataRef("sim/time/paused"))
-		#if paused:
-		#	return LOG_INTERVAL_SECS
-		
-		framevals = []
-		#framevals.append(str(elapsed))
-		for _, dataref in DATAREF_MAP.items():
-			dataref_val = None
-			if (callable(dataref)):
-				dataref_val = dataref()
-			else:
-				dataref_val = XPLMGetDataf(XPLMFindDataRef(dataref))
-			framevals.append(str(dataref_val))
-
-		self.OutputFile.write(",".join(framevals) + "\n")
+		# If we just logged a paused frame, remember it, so we don't log further frames until we get unpaused
+		if paused:
+			self.PauseFrameProcessed = True
+		else:
+			self.PauseFrameProcessed = False
 		
 		return LOG_INTERVAL_SECS
 
