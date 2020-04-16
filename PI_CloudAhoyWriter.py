@@ -69,7 +69,7 @@ class PythonInterface:
 		XPLMAppendMenuItem(self.ourMenu, "Restart logging", 2, 1)
 	
 	def MenuDestroy(self):
-		XPLMDestroyMenu(self.ourMenu)
+		XPLMDestroyMenu(self, self.ourMenu)
 	
 	def MenuHandlerCB(self, inMenuRef, inItemRef):
 		if inItemRef == 0:
