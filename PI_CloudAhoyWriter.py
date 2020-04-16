@@ -36,6 +36,11 @@ DATAREF_MAP = OrderedDict([
 	("knots/TAS", ("sim/cockpit2/gauges/indicators/true_airspeed_kts_pilot", IDENTITY)),
 ])
 
+# Menu item indices
+MENU_START = 0
+MENU_STOP = 1
+MENU_RESTART = 2
+
 class PythonInterface:
 	def XPluginStart(self):
 		self.IsLogging = False
@@ -48,8 +53,8 @@ class PythonInterface:
 			"Records sim data in a format understood by CloudAhoy.")
 
 	def XPluginStop(self):
-		self.MenuDestroy()
 		self.StopLogging()
+		self.MenuDestroy()
 
 	def XPluginEnable(self):
 		return 1
@@ -63,20 +68,29 @@ class PythonInterface:
 	def MenuSetup(self):
 		idx = XPLMAppendMenuItem(XPLMFindPluginsMenu(), "CloudAhoy Writer", 0, 0)
 		self.ourMenuHandlerCb = self.MenuHandlerCB
-		self.ourMenu = XPLMCreateMenu(self, "CloudAhoy Writer", XPLMFindPluginsMenu(), idx, self.ourMenuHandlerCb, 0)
-		XPLMAppendMenuItem(self.ourMenu, "Start logging", 0, 1)
-		XPLMAppendMenuItem(self.ourMenu, "Stop logging", 1, 1)
-		XPLMAppendMenuItem(self.ourMenu, "Restart logging", 2, 1)
+		self.ourMenu = XPLMCreateMenu(self, "CloudAhoy Writer", 
+		    XPLMFindPluginsMenu(), idx, self.ourMenuHandlerCb, 0)
+		XPLMAppendMenuItem(self.ourMenu, "Start logging", MENU_START, 1)
+		XPLMAppendMenuItem(self.ourMenu, "Stop logging", MENU_STOP, 1)
+		XPLMAppendMenuItem(self.ourMenu, "Restart logging", MENU_RESTART, 1)
+
+	def UpdateMenuItems(self):
+		if self.IsLogging:
+			XPLMEnableMenuItem(self.ourMenu, MENU_START, 0)
+			XPLMEnableMenuItem(self.ourMenu, MENU_STOP, 1)
+		else:
+			XPLMEnableMenuItem(self.ourMenu, MENU_START, 1)
+			XPLMEnableMenuItem(self.ourMenu, MENU_STOP, 0)
 	
 	def MenuDestroy(self):
 		XPLMDestroyMenu(self.ourMenu)
 	
 	def MenuHandlerCB(self, inMenuRef, inItemRef):
-		if inItemRef == 0:
+		if inItemRef == MENU_START:
 			self.StartLogging()
-		elif inItemRef == 1:
+		elif inItemRef == MENU_STOP:
 			self.StopLogging()
-		elif inItemRef == 2:
+		elif inItemRef == MENU_RESTART:
 			self.StopLogging()
 			self.StartLogging()
 
@@ -92,6 +106,7 @@ class PythonInterface:
 			return
 		
 		self.IsLogging = True
+		self.UpdateMenuItems()
 
 		formattedDate = datetime.datetime.today().strftime("%Y-%m-%d_%H-%M-%S")
 		self.OutputPath = self.__MakePathForFilename(formattedDate)
@@ -119,6 +134,7 @@ class PythonInterface:
 		self.OutputPath = None
 		self.OutputFile = None
 		self.IsLogging = False
+		self.UpdateMenuItems()
 		XPLMSpeakString("CloudAhoy: stopped logging")
 
 	def WriteMetadata(self):
