@@ -28,8 +28,8 @@ This plugin records data from your X-Plane flight to a CSV file that's ready to 
          PI_CloudAhoyWriter.py
 ```
 ## Using the plugin
-* When you are ready to start logging, open the menu: Plugins > CloudAhoy Writer > Start Logging
-* When you are done, choose Stop Logging
+* The plugin automatically starts logging as soon as you launch X-Plane.
+* When you are ready to stop logging, open the menu: Plugins > CloudAhoy Writer > Stop Logging
 * The tracking file will be in your X-Plane `Output\flightdata` directory with a name based on the date and time.
 * Upload that file to CloudAhoy
 
