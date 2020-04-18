@@ -46,7 +46,6 @@ class PythonInterface:
 		self.IsLogging = False
 		self.InitDatarefs()
 		self.MenuSetup()
-		self.StartLogging()
 		return (
 			"CloudAhoy Writer",
 			"Adi.CloudAhoyWriter",
@@ -73,6 +72,7 @@ class PythonInterface:
 		XPLMAppendMenuItem(self.ourMenu, "Start logging", MENU_START, 1)
 		XPLMAppendMenuItem(self.ourMenu, "Stop logging", MENU_STOP, 1)
 		XPLMAppendMenuItem(self.ourMenu, "Restart logging", MENU_RESTART, 1)
+		self.UpdateMenuItems()
 
 	def UpdateMenuItems(self):
 		if self.IsLogging:
