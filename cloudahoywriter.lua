@@ -82,4 +82,15 @@ function CAWR_show_ui()
     draw_string(centerX - (measure_string("12:34") / 2), y1 + 10, "12:34")
 end
 
+function CAWR_on_mouse_click()
+    if MOUSE_X < x1 or MOUSE_X > x2 then return end
+    if MOUSE_Y < y1 or MOUSE_Y > y2 then return end
+    if MOUSE_STATUS == 'up' then
+        is_recording = not is_recording
+    end
+
+    RESUME_MOUSE_CLICK = true -- consume click
+end
+
 do_every_draw("CAWR_show_ui()")
+do_on_mouse_click("CAWR_on_mouse_click()")
