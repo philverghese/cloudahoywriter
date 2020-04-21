@@ -9,6 +9,7 @@ require('graphics')
 
 -- State
 local is_recording = false
+local enable_auto_hide = true
 
 -- Bounds for control box
 local width = measure_string("X99:99X")
@@ -47,6 +48,10 @@ local recOnB = 0.2
 local recOnA = 0.8
 
 function CAWR_show_ui()
+    if enable_auto_hide and (MOUSE_X > width * 3) then
+        return
+    end
+
     XPLMSetGraphicsState(0, 0, 0, 1, 1, 0, 0)
 
     -- Background rectangle
@@ -75,7 +80,6 @@ function CAWR_show_ui()
 
     -- Recording time
     draw_string(centerX - (measure_string("12:34") / 2), y1 + 10, "12:34")
-
 end
 
 do_every_draw("CAWR_show_ui()")
