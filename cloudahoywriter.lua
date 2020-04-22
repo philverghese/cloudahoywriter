@@ -7,15 +7,19 @@ local versionNum = '0.0.1'
 
 require('graphics')
 
+-- Constants
+local SECONDS_PER_MINUTE = 60
+local SECONDS_PER_HOUR = SECONDS_PER_MINUTE * 60
+
 -- State
 local enable_auto_hide = true
 local is_recording = false
 local flight_number = LUA_RUN
 local recording_start_time = nil
-local recording_display_time = "00:00:00"
+local recording_display_time = "0:00:00"
 
 -- Bounds for control box
-local width = measure_string("X99:99:99X")
+local width = measure_string("X9:99:99X")
 local height = 90
 local cawr_width = measure_string("CAWR")
 local x1 = 0
@@ -58,9 +62,17 @@ local function toggle_recording_state()
 end
 
 local function get_recording_display_time()
-    if recording_display_time == nil then return "00:00:00" end
+    if recording_start_time == nil then return "0:00:00" end
     local current_time = os.clock()
-    return "00:02:04"
+
+    local elapsed_seconds = current_time - recording_start_time
+    local hours = math.floor(elapsed_seconds / SECONDS_PER_HOUR)
+    elapsed_seconds = elapsed_seconds - (hours * SECONDS_PER_HOUR)
+    local minutes = math.floor(elapsed_seconds / SECONDS_PER_MINUTE)
+    elapsed_seconds = elapsed_seconds - (minutes * SECONDS_PER_MINUTE)
+    local seconds = math.floor(elapsed_seconds)
+
+    return string.format("%01d:%02d:%02d", hours, minutes, seconds)
 end
 
 function CAWR_show_ui()
