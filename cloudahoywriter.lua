@@ -128,15 +128,16 @@ local function create_output_directory()
     local output_contents = directory_to_table(output_directory)
     local has_flightdata = false
     for i, name in ipairs(output_contents) do
-        -- print(i .. " " .. name)
         if name == flightdata_directory then
             has_flightdata = true
             break
         end
     end
     if not has_flightdata then
-        print("execute: mkdir " .. output_directory .. "/" .. flightdata_directory)
-        os.execute("mkdir " .. output_directory .. "/" .. flightdata_directory)
+        local mkdir_command = 'mkdir "' .. output_directory .. 
+            '/' .. flightdata_directory .. '"'
+        print('executing: ' .. mkdir_command)
+        os.execute(create_directory_command)
     end
 end
 
