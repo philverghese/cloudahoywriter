@@ -13,7 +13,6 @@ local SECONDS_PER_HOUR = SECONDS_PER_MINUTE * 60
 
 -- State
 local enable_auto_hide = true
-local is_recording = false
 local flight_number = LUA_RUN
 local recording_start_time = nil
 local recording_display_time = "0:00:00"
@@ -122,5 +121,29 @@ function CAWR_on_mouse_click()
     RESUME_MOUSE_CLICK = true -- consume click
 end
 
+-- Creates the "Output/flightdata" directory if it doesn't exist.
+local function create_output_directory()
+    local output_directory = SYSTEM_DIRECTORY .. "Output" -- X-plane Output
+    local flightdata_directory = "flightdata"
+    local output_contents = directory_to_table(output_directory)
+    local has_flightdata = false
+    for i, name in ipairs(output_contents) do
+        -- print(i .. " " .. name)
+        if name == flightdata_directory then
+            has_flightdata = true
+            break
+        end
+    end
+    if not has_flightdata then
+        print("execute: mkdir " .. output_directory .. "/" .. flightdata_directory)
+        os.execute("mkdir " .. output_directory .. "/" .. flightdata_directory)
+    end
+end
+
+local function main()
+    create_output_directory()
+end
+
+main()
 do_every_draw("CAWR_show_ui()")
 do_on_mouse_click("CAWR_on_mouse_click()")
