@@ -46,6 +46,10 @@ local function initialize_datarefs()
         end
         print('  conversion=' .. v.conversion)
     end
+
+    print('CAWR_flightTimeSec=' .. CAWR_flightTimeSec)
+    print('CAWR_indAlt=' .. CAWR_indAlt)
+    print('CAWR_flightModelAlt=' .. CAWR_flightModelAlt)
 end
 
 function CAWR_write_data()
