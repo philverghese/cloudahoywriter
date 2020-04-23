@@ -11,23 +11,26 @@ require('graphics')
 --   Structure
 --      - csvField: name of CloudAhoy CSV field
 --      - dataRefs: names of X-Plane datarefs. Sometimes multiple datarefs
---                      have to be looked at to find which one is set
---      - varNames: names of variables mapped to the dataRefs
+--                      have to be looked at to find which one is set. The
+--                      list is traversed in the order declared.
+--      - varNames: names of variables mapped to the dataRefs. Must be same
+--                      length as dataRefs. These are globals, so prefix with
+--                      CAWR_.
 --      - conversion: function to convert units from datarefs to CSV
---                        (e.g. meters to feet)
+--                        (e.g. meters to feet). Only one per csvField.
 local dataTable = {
     {
         csvField='seconds/t',
         dataRefs={'sim/time/total_flight_time_sec'},
-        varNames={'flightTimeSec'},
+        varNames={'CAWR_flightTimeSec'},
         conversion='CAWR_identity',
     },
     {
         csvField='ft Baro/AltB',
         dataRefs={'sim/cockpit2/gauges/indicators/altitude_ft_pilot',
             'sim/flightmodel/misc/h_ind'},
-        varNames={'indAlt',
-            'flightModelAlt'},
+        varNames={'CAWR_indAlt',
+            'CAWR_flightModelAlt'},
         conversion='CAWR_identity',
     },
 }
@@ -35,11 +38,11 @@ local dataTable = {
 local function initialize_datarefs()
     for i,v in ipairs(dataTable) do
         print('csvField=' .. v.csvField)
-        for i,ref in ipairs(v.dataRefs) do
-            print('  dataRef=' .. ref)
-        end
-        for i,var in ipairs(v.varNames) do
-            print('  varName=' .. var)
+
+        for i=1,#v.dataRefs do
+            print('  dataRef=' .. v.dataRefs[i])
+            print('  varName=' .. v.varNames[i])
+            DataRef(v.varNames[i], v.dataRefs[i])
         end
         print('  conversion=' .. v.conversion)
     end
