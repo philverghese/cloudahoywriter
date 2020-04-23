@@ -7,6 +7,47 @@ local versionNum = '0.0.1'
 
 require('graphics')
 
+-- Data Table
+--   Structure
+--      - csvField: name of CloudAhoy CSV field
+--      - dataRefs: names of X-Plane datarefs. Sometimes multiple datarefs
+--                      have to be looked at to find which one is set
+--      - varNames: names of variables mapped to the dataRefs
+--      - conversion: function to convert units from datarefs to CSV
+--                        (e.g. meters to feet)
+local dataTable = {
+    {
+        csvField='seconds/t',
+        dataRefs={'sim/time/total_flight_time_sec'},
+        varNames={'flightTimeSec'},
+        conversion='CAWR_identity',
+    },
+    {
+        csvField='ft Baro/AltB',
+        dataRefs={'sim/cockpit2/gauges/indicators/altitude_ft_pilot',
+            'sim/flightmodel/misc/h_ind'},
+        varNames={'indAlt',
+            'flightModelAlt'},
+        conversion='CAWR_identity',
+    },
+}
+
+local function initialize_datarefs()
+    for i,v in ipairs(dataTable) do
+        print('csvField=' .. v.csvField)
+        for i,ref in ipairs(v.dataRefs) do
+            print('  dataRef=' .. ref)
+        end
+        for i,var in ipairs(v.varNames) do
+            print('  varName=' .. var)
+        end
+        print('  conversion=' .. v.conversion)
+    end
+end
+
+function CAWR_write_data()
+end
+
 -- Constants
 local SECONDS_PER_MINUTE = 60
 local SECONDS_PER_HOUR = SECONDS_PER_MINUTE * 60
@@ -139,8 +180,10 @@ end
 
 local function main()
     create_output_directory()
+    initialize_datarefs()
 end
 
 main()
 do_every_draw("CAWR_show_ui()")
 do_on_mouse_click("CAWR_on_mouse_click()")
+-- do_often("CAWR_write_data()")
