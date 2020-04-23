@@ -135,9 +135,9 @@ local function create_output_directory()
     end
     if not has_flightdata then
         local mkdir_command = 'mkdir "' .. output_directory .. 
-            '/' .. flightdata_directory .. '"'
+             '/' .. flightdata_directory .. '"'
         print('executing: ' .. mkdir_command)
-        os.execute(create_directory_command)
+        os.execute(mkdir_command)
     end
 end
 
