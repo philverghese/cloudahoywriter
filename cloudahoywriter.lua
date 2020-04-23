@@ -126,19 +126,15 @@ local function create_output_directory()
     local output_directory = SYSTEM_DIRECTORY .. "Output" -- X-plane Output
     local flightdata_directory = "flightdata"
     local output_contents = directory_to_table(output_directory)
-    local has_flightdata = false
     for i, name in ipairs(output_contents) do
         if name == flightdata_directory then
-            has_flightdata = true
-            break
+            return
         end
     end
-    if not has_flightdata then
-        local mkdir_command = 'mkdir "' .. output_directory .. 
-             '/' .. flightdata_directory .. '"'
-        print('executing: ' .. mkdir_command)
-        os.execute(mkdir_command)
-    end
+    local mkdir_command = 'mkdir "' .. output_directory
+            .. '/' .. flightdata_directory .. '"'
+    print('executing: ' .. mkdir_command)
+    os.execute(mkdir_command)
 end
 
 local function main()
