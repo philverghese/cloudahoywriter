@@ -18,20 +18,22 @@ local FLIGHTDATA_DIRECTORY_NAME = 'flightdata'
 local OUTPUT_PATH_NAME =  SYSTEM_DIRECTORY .. 'Output/' .. FLIGHTDATA_DIRECTORY_NAME
 
 -------------------- STATE --------------------
-local recording_start_os_time = nil
-local recording_start_sim_time = nil
-local recording_lua_run = nil
-local recording_display_time = '0:00:00'
+local recordingStartOsTime = nil
+local recordingStartSimTime = nil
+local recordingLuaRun = nil
+local recordingDisplayTime = '0:00:00'
 
 local function is_recording()
-    return recording_start_os_time ~= nil
+    return recordingStartOsTime ~= nil
 end
+
+
 
 -------------------- UI --------------------
 -- Bounds for control box
 local width = measure_string('X9:99:99X')
 local height = 90
-local cawr_width = measure_string('CAWR')
+local cawrWidth = measure_string('CAWR')
 local x1 = 0
 local x2 = x1 + width
 local y1 = (SCREEN_HIGHT / 2) - 50
@@ -43,12 +45,12 @@ local centerY = y1 + ((y2 - y1) / 2)
 local function get_recording_display_time()
     if not is_recording() then return '0:00:00' end
 
-    local elapsed_seconds = CAWR_flightTimeSec - recording_start_sim_time
-    local hours = math.floor(elapsed_seconds / SECONDS_PER_HOUR)
-    elapsed_seconds = elapsed_seconds - (hours * SECONDS_PER_HOUR)
-    local minutes = math.floor(elapsed_seconds / SECONDS_PER_MINUTE)
-    elapsed_seconds = elapsed_seconds - (minutes * SECONDS_PER_MINUTE)
-    local seconds = math.floor(elapsed_seconds)
+    local elapsedSeconds = CAWR_flightTimeSec - recordingStartSimTime
+    local hours = math.floor(elapsedSeconds / SECONDS_PER_HOUR)
+    elapsedSeconds = elapsedSeconds - (hours * SECONDS_PER_HOUR)
+    local minutes = math.floor(elapsedSeconds / SECONDS_PER_MINUTE)
+    elapsedSeconds = elapsedSeconds - (minutes * SECONDS_PER_MINUTE)
+    local seconds = math.floor(elapsedSeconds)
 
     return string.format('%01d:%02d:%02d', hours, minutes, seconds)
 end
@@ -89,7 +91,7 @@ function CAWR_show_ui()
 
     -- Foreground lines and text
     graphics.set_color(fgR, fgG, fgB, fgA)
-    draw_string(centerX - (cawr_width / 2), y2 - 16, 'CAWR')
+    draw_string(centerX - (cawrWidth / 2), y2 - 16, 'CAWR')
     graphics.set_width(2)
     graphics.draw_line(x1, y2, x2, y2)
     graphics.draw_line(x1, y2 - 30, x2, y2 - 30)
@@ -100,7 +102,7 @@ function CAWR_show_ui()
     -- Recording circle
     if is_recording() then
         graphics.set_color(recOnR, recOnG, recOnB, recOnA)
-        recording_display_time = get_recording_display_time()
+        recordingDisplayTime = get_recording_display_time()
     else
         graphics.set_color(recOffR, recOffG, recOffB, recOffA)
     end
@@ -109,8 +111,8 @@ function CAWR_show_ui()
     graphics.draw_circle(centerX, centerY - 5, 12, 2)
 
     -- Recording time
-    draw_string(centerX - (measure_string(recording_display_time) / 2),
-        y1 + 10, recording_display_time)
+    draw_string(centerX - (measure_string(recordingDisplayTime) / 2),
+        y1 + 10, recordingDisplayTime)
 end
 -------------------- UI --------------------
 
@@ -130,7 +132,7 @@ end
 -- to recording_start_time. sim/time/total_flight_time_sec resets to 0
 -- when the aircraft or position is changed by the user.
 local function simTime_to_recordingTime(simTime)
-    return simTime - recording_start_sim_time
+    return simTime - recordingStartSimTime
 end
 
 -- Data Table
@@ -140,6 +142,7 @@ end
 --      - varName: name of variable mapped to the dataRef
 --      - conversion: optional function to convert units from dataRef to CSV
 local dataTable = {
+    -- TODO: More things to log based on sample data
     {
         csvField='seconds/t',
         dataRef='sim/time/total_flight_time_sec',
@@ -190,6 +193,11 @@ local dataTable = {
         varName='CAWR_heading',
     },
     {
+        csvField='degrees/TRK',
+        dataRef='sim/cockpit2/gauges/indicators/ground_track_mag_pilot',
+        varName='CAWR_degreesTrack',
+    },
+    {
         csvField='degrees/MagVar',
         dataRef='sim/flightmodel/position/magnetic_variation',
         varName='CAWR_magVar',
@@ -209,11 +217,6 @@ local dataTable = {
         dataRef='sim/flightmodel/position/beta',
         varName='CAWR_degreesYaw',
     },
-    {
-        csvField='degrees/TRK',
-        dataRef='sim/cockpit2/gauges/indicators/ground_track_mag_pilot',
-        varName='CAWR_degreesTrack',
-    },
 }
 
 local function initialize_datarefs()
@@ -232,42 +235,42 @@ end
 
 
 -------------------- DATA RECORDING --------------------
-local function write_csv_header(start_time)
+local function write_csv_header(startTime)
     -- Metadata
     io.write('Metadata,CA_CSV.3\n')
-    io.write(string.format('GMT,%d\n', start_time))
-    io.write('TAIL,*UNK\n')
-    io.write('GPS,XPlane\n')
+    io.write(string.format('GMT,%d\n', startTime))
+    io.write('TAIL,UNKNOWN\n') -- TODO: Allow user entry
+    io.write(string.format('GPS,X-Plane CloudAhoy Writer %s\n', versionNum))
     io.write('ISSIM,1\n')
     io.write('DATA,\n')
 
     -- Column identifiers
-    local trailing_char = ','
+    local trailingChar = ','
     for i,v in ipairs(dataTable) do
-        if i == #dataTable then trailing_char = '\n' end
-        io.write(string.format('%s%s', v.csvField, trailing_char))
+        if i == #dataTable then trailingChar = '\n' end
+        io.write(string.format('%s%s', v.csvField, trailingChar))
     end
 end
 
 local function start_recording()
     assert(not is_recording(), 'start_recording called in wrong state')
-    local start_time = os.time()
-    local times = os.date('*t', start_time)
-    local output_filename = string.format('CAWR-%4d-%02d-%02d_%02d-%02d-%02d.csv',
+    local startTime = os.time()
+    local times = os.date('*t', startTime)
+    local outputFilename = string.format('CAWR-%4d-%02d-%02d_%02d-%02d-%02d.csv',
         times.year, times.month, times.day, times.hour, times.min, times.sec)
-    io.output(OUTPUT_PATH_NAME .. '/' .. output_filename)
-    write_csv_header(start_time)
+    io.output(OUTPUT_PATH_NAME .. '/' .. outputFilename)
+    write_csv_header(startTime)
 
     -- Don't set this until the header is written to avoid a race with the code that
     -- writes the data after the header.
-    recording_start_os_time = start_time
-    recording_start_sim_time = CAWR_flightTimeSec
-    recording_lua_run = LUA_RUN -- Increments when aircraft or start position changes
+    recordingStartOsTime = startTime
+    recordingStartSimTime = CAWR_flightTimeSec
+    recordingLuaRun = LUA_RUN -- Increments when aircraft or start position changes
 end
 
 local function stop_recording()
     assert(is_recording(), 'stop_recording called in wrong state')
-    recording_start_os_time = nil
+    recordingStartOsTime = nil
     io.close()
 end
 
@@ -292,21 +295,25 @@ end
 
 -- Writes to output file. Runs every second.
 function CAWR_write_data()
+    if not is_recording() then return end
+
     -- TODO: Check for change in LUA_RUN and handle it.
        -- Start a new recording if we're in the middle of one
        -- Reset time vars maybe
        -- Maybe do the same type of handling for a big location change when the
        --   user manually repositions the aircraft using the map.
 
+    --TODO: Check sim/flightmodel2/misc/has_crashed to detect if the simulated
+    --          airplane has had a simulated crash. Stop recording when that happens?
+    if CAWR_isPaused == 1 then return end
 
-    if not is_recording() or CAWR_isPaused == 1 then return end
-    local trailing_char = ','
+    local trailingChar = ','
     for i,v in ipairs(dataTable) do
-        if i == #dataTable then trailing_char = '\n' end
-        local data_value = _G[v.varName] or 0
-        if v.conversion then data_value = v.conversion(data_value) end
-        io.write(data_value)
-        io.write(trailing_char)
+        if i == #dataTable then trailingChar = '\n' end
+        local dataValue = _G[v.varName] or 0
+        if v.conversion then dataValue = v.conversion(dataValue) end
+        io.write(dataValue)
+        io.write(trailingChar)
     end
 end
 
@@ -318,17 +325,17 @@ end
 
 -- Creates the 'Output/flightdata' directory if it doesn't exist.
 local function create_output_directory()
-    local output_directory = SYSTEM_DIRECTORY .. 'Output' -- X-plane Output
-    local output_contents = directory_to_table(output_directory)
-    for i, name in ipairs(output_contents) do
+    local outputDirectory = SYSTEM_DIRECTORY .. 'Output' -- X-plane Output
+    local outputContents = directory_to_table(outputDirectory)
+    for i, name in ipairs(outputContents) do
         if name == FLIGHTDATA_DIRECTORY_NAME then
             return
         end
     end
-    local mkdir_command = 'mkdir "' .. output_directory
+    local mkdirCommand = 'mkdir "' .. outputDirectory
             .. '/' .. FLIGHTDATA_DIRECTORY_NAME .. '"'
-    print('executing: ' .. mkdir_command)
-    os.execute(mkdir_command)
+    print('executing: ' .. mkdirCommand)
+    os.execute(mkdirCommand)
 end
 -------------------- DATA RECORDING --------------------
 
@@ -338,12 +345,11 @@ end
 -------------------- MAIN --------------------
 create_output_directory()
 initialize_datarefs()
--------------------- MAIN --------------------
 
 
 
 
--------------------- FWL HOOKS --------------------
+-------------------- FlyWithLua HOOKS --------------------
 do_every_draw('CAWR_show_ui()')
 do_on_mouse_click('CAWR_on_mouse_click()')
 do_often('CAWR_write_data()')
