@@ -47,6 +47,10 @@ local dataTable = {
     },
 }
 
+function CAWR_meters_to_feet(meters)
+    return meters * 3.281
+end
+
 local function initialize_datarefs()
     for i,v in ipairs(dataTable) do
         print('csvField=' .. v.csvField)
@@ -68,6 +72,7 @@ local function initialize_datarefs()
     print('LATITUDE=' .. LATITUDE)
     print('LONGITUDE=' .. LONGITUDE)
     print('ELEVATION=' .. ELEVATION)
+    print('   converted ' .. _G['CAWR_meters_to_feet'](ELEVATION))
     print('CAWR_indAlt=' .. CAWR_indAlt)
 end
 
