@@ -2,6 +2,10 @@
 -- CloudAhoy Writer
 --  Original Python by Adrian Velicu
 --  Lua version by Phil Verghese
+--
+-- Code conventions
+--  - Use local when possible
+--  - Globals are prefixed with CAWR_
 -----------------------------------------------
 local versionNum = '0.0.1'
 
@@ -10,122 +14,103 @@ require('graphics')
 -- Data Table
 --   Structure
 --      - csvField: name of CloudAhoy CSV field
---      - dataRefs: names of X-Plane datarefs. Sometimes multiple datarefs
---                      have to be looked at to find which one is set. The
---                      list is traversed in the order declared.
---      - varNames: names of variables mapped to the dataRefs. Must be same
---                      length as dataRefs. These are globals, so prefix with
---                      CAWR_.
---      - conversion: optional function to convert units from datarefs to CSV
+--      - dataRef: name of X-Plane dataref
+--      - varName: name of variable mapped to the dataRef.
+--      - conversion: optional function to convert units from dataRef to CSV
 --                        (e.g. meters to feet). Only one per csvField.
-local dataTable = {
-    {
-        csvField='seconds/t',
-        dataRefs={'sim/time/total_flight_time_sec'},
-        varNames={'CAWR_flightTimeSec'},
-    },
-    {
-        csvField='degrees/LAT',
-        dataRefs={'sim/flightmodel/position/latitude'},
-        varNames={'LATITUDE'},
-    },
-    {
-        csvField='degrees/LON',
-        dataRefs={'sim/flightmodel/position/longitude'},
-        varNames={'LONGITUDE'},
-    },
-    {
-        csvField='feet/ALT (GPS)',
-        dataRefs={'sim/flightmodel/position/elevation'},
-        varNames={'ELEVATION'},
-        conversion='CAWR_meters_to_feet',
-    },
-    {
-        csvField='ft Baro/AltB',
-        dataRefs={'sim/cockpit2/gauges/indicators/altitude_ft_pilot'},
-        varNames={'CAWR_indAlt'},
-    },
-    {
-        csvField='knots/GS',
-        dataRefs={'sim/flightmodel/position/groundspeed'},
-        varNames={'CAWR_groundSpeed'},
-        conversion='CAWR_mps_to_knots',
-    },
-    {
-        csvField='knots/IAS',
-        dataRefs={'sim/flightmodel/position/indicated_airspeed'},
-        varNames={'CAWR_indicatedSpeed'},
-    },
-    {
-        csvField='knots/TAS',
-        dataRefs={'sim/flightmodel/position/true_airspeed'},
-        varNames={'CAWR_trueSpeed'},
-        conversion='CAWR_mps_to_knots',
-    },
-    {
-        csvField='degrees/HDG',
-        dataRefs={'sim/flightmodel/position/mag_psi'},
-        varNames={'CAWR_heading'},
-    },
-    {
-        csvField='degrees/MagVar',
-        dataRefs={'sim/flightmodel/position/magnetic_variation'},
-        varNames={'CAWR_magVar'},
-    },
-    {
-        csvField='degrees/Pitch',
-        dataRefs={'sim/flightmodel/position/true_theta'},
-        varNames={'CAWR_degreesPitch'},
-    },
-    {
-        csvField='degrees/Roll',
-        dataRefs={'sim/flightmodel/position/true_phi'},
-        varNames={'CAWR_degreesRoll'},
-    },
-    {
-        csvField='degrees/Yaw',
-        dataRefs={'sim/flightmodel/position/beta'},
-        varNames={'CAWR_degreesYaw'},
-    },
-    {
-        csvField='degrees/TRK',
-        dataRefs={'sim/cockpit2/gauges/indicators/ground_track_mag_pilot'},
-        varNames={'CAWR_degreesTrack'},
-    },
 
-}
-
-function CAWR_meters_to_feet(meters)
+local function meters_to_feet(meters)
     return meters * 3.281
 end
 
-function CAWR_mps_to_knots(mps)
+local function mps_to_knots(mps)
     return mps * 1.944
 end
 
+local dataTable = {
+    {
+        csvField='seconds/t',
+        dataRef='sim/time/total_flight_time_sec',
+        varName='CAWR_flightTimeSec',
+    },
+    {
+        csvField='degrees/LAT',
+        dataRef='sim/flightmodel/position/latitude',
+        varName='LATITUDE',
+    },
+    {
+        csvField='degrees/LON',
+        dataRef='sim/flightmodel/position/longitude',
+        varName='LONGITUDE',
+    },
+    {
+        csvField='feet/ALT (GPS)',
+        dataRef='sim/flightmodel/position/elevation',
+        varName='ELEVATION',
+        conversion=meters_to_feet,
+    },
+    {
+        csvField='ft Baro/AltB',
+        dataRef='sim/cockpit2/gauges/indicators/altitude_ft_pilot',
+        varName='CAWR_indAlt',
+    },
+    {
+        csvField='knots/GS',
+        dataRef='sim/flightmodel/position/groundspeed',
+        varName='CAWR_groundSpeed',
+        conversion=mps_to_knots,
+    },
+    {
+        csvField='knots/IAS',
+        dataRef='sim/flightmodel/position/indicated_airspeed',
+        varName='CAWR_indicatedSpeed',
+    },
+    {
+        csvField='knots/TAS',
+        dataRef='sim/flightmodel/position/true_airspeed',
+        varName='CAWR_trueSpeed',
+        conversion=mps_to_knots,
+    },
+    {
+        csvField='degrees/HDG',
+        dataRef='sim/flightmodel/position/mag_psi',
+        varName='CAWR_heading',
+    },
+    {
+        csvField='degrees/MagVar',
+        dataRef='sim/flightmodel/position/magnetic_variation',
+        varName='CAWR_magVar',
+    },
+    {
+        csvField='degrees/Pitch',
+        dataRef='sim/flightmodel/position/true_theta',
+        varName='CAWR_degreesPitch',
+    },
+    {
+        csvField='degrees/Roll',
+        dataRef='sim/flightmodel/position/true_phi',
+        varName='CAWR_degreesRoll',
+    },
+    {
+        csvField='degrees/Yaw',
+        dataRef='sim/flightmodel/position/beta',
+        varName='CAWR_degreesYaw',
+    },
+    {
+        csvField='degrees/TRK',
+        dataRef='sim/cockpit2/gauges/indicators/ground_track_mag_pilot',
+        varName='CAWR_degreesTrack',
+    },
+}
+
 local function initialize_datarefs()
     for i,v in ipairs(dataTable) do
-        print('csvField=' .. v.csvField)
-
-        for i=1,#v.dataRefs do
-            print('  dataRef=' .. v.dataRefs[i])
-            print('  varName=' .. v.varNames[i])
-            if string.find(v.varNames[i], 'CAWR_') then
-                -- Only register variables that start with our prefix. Some dataRefs
-                -- we want are already registered by FWL (e.g. ELEVATION, LATITUDE).
-                DataRef(v.varNames[i], v.dataRefs[i])
-            end
+        if string.find(v.varName, 'CAWR_') then
+            -- Only register variables that start with our prefix. Some dataRefs
+            -- we want are already registered by FWL (e.g. ELEVATION, LATITUDE).
+            DataRef(v.varName, v.dataRef)
         end
-        if v.conversion then print('  conversion=' .. v.conversion) end
     end
-
-    print('CAWR_flightTimeSec=' .. CAWR_flightTimeSec)
-    print('CAWR_indAlt=' .. CAWR_indAlt)
-    print('LATITUDE=' .. LATITUDE)
-    print('LONGITUDE=' .. LONGITUDE)
-    print('ELEVATION=' .. ELEVATION)
-    print('   converted ' .. _G['CAWR_meters_to_feet'](ELEVATION))
-    print('CAWR_indAlt=' .. CAWR_indAlt)
 end
 
 -- Constants
@@ -150,30 +135,6 @@ local y1 = (SCREEN_HIGHT / 2) - 50
 local y2 = y1 + height
 local centerX = x1 + (width / 2)
 local centerY = y1 + ((y2 - y1) / 2)
-
--- background color
-local bgR = 0.2
-local bgG = 0.2
-local bgB = 0.2
-local bgA = 0.8
-
--- foreground color
-local fgR = 0.8
-local fgG = 0.8
-local fgB = 0.8
-local fgA = 0.8
-
--- recording off color
-local recOffR = 0.05
-local recOffG = 0.05
-local recOffB = 0.05
-local recOffA = 0.8
-
--- recording on color
-local recOnR = 0.9
-local recOnG = 0.2
-local recOnB = 0.2
-local recOnA = 0.8
 
 local function write_csv_header(start_time)
     -- Metadata
@@ -234,12 +195,65 @@ local function get_recording_display_time()
     return string.format('%01d:%02d:%02d', hours, minutes, seconds)
 end
 
+function CAWR_on_mouse_click()
+    if MOUSE_X < x1 or MOUSE_X > x2 then return end
+    if MOUSE_Y < y1 or MOUSE_Y > y2 then return end
+    if MOUSE_STATUS == 'up' then
+        toggle_recording_state()
+    end
+
+    RESUME_MOUSE_CLICK = true -- consume click
+end
+
+-- Runs every second
+function CAWR_write_data()
+    if not recording_start_time then return end
+    local trailing_char = ','
+    for i,v in ipairs(dataTable) do
+        if i == #dataTable then trailing_char = '\n' end
+        local data_value = _G[v.varName] or 0
+        if v.conversion then data_value = v.conversion(data_value) end
+        io.write(data_value)
+        io.write(trailing_char)
+    end
+end
+
+-- Runs every 10 seconds
+function CAWR_do_sometimes()
+    if not recording_start_time then return end
+    io.flush()
+end
+
+-- Runs on every draw
 function CAWR_show_ui()
     if enable_auto_hide and (MOUSE_X > width * 3) then
         return
     end
 
     XPLMSetGraphicsState(0, 0, 0, 1, 1, 0, 0)
+    -- background color
+    local bgR = 0.2
+    local bgG = 0.2
+    local bgB = 0.2
+    local bgA = 0.8
+
+    -- foreground color
+    local fgR = 0.8
+    local fgG = 0.8
+    local fgB = 0.8
+    local fgA = 0.8
+
+    -- recording off color
+    local recOffR = 0.05
+    local recOffG = 0.05
+    local recOffB = 0.05
+    local recOffA = 0.8
+
+    -- recording on color
+    local recOnR = 0.9
+    local recOnG = 0.2
+    local recOnB = 0.2
+    local recOnA = 0.8
 
     -- Background rectangle
     graphics.set_color(bgR, bgG, bgB, bgA)
@@ -271,16 +285,6 @@ function CAWR_show_ui()
         y1 + 10, recording_display_time)
 end
 
-function CAWR_on_mouse_click()
-    if MOUSE_X < x1 or MOUSE_X > x2 then return end
-    if MOUSE_Y < y1 or MOUSE_Y > y2 then return end
-    if MOUSE_STATUS == 'up' then
-        toggle_recording_state()
-    end
-
-    RESUME_MOUSE_CLICK = true -- consume click
-end
-
 -- Creates the 'Output/flightdata' directory if it doesn't exist.
 local function create_output_directory()
     local output_directory = SYSTEM_DIRECTORY .. 'Output' -- X-plane Output
@@ -296,31 +300,10 @@ local function create_output_directory()
     os.execute(mkdir_command)
 end
 
-function CAWR_write_data()
-    if not recording_start_time then return end
-    local trailing_char = ','
-    for i,v in ipairs(dataTable) do
-        if i == #dataTable then trailing_char = '\n' end
-        -- TODO: handle multiple data values and finding the best one
-        --       This is always going to pick the first one.
-        local data_value = _G[v.varNames[1]] or 0
-        if v.conversion then data_value = _G[v.conversion](data_value) end
-        io.write(data_value)
-        io.write(trailing_char)
-    end
-end
+-- MAIN
+create_output_directory()
+initialize_datarefs()
 
-function CAWR_do_sometimes()
-    if not recording_start_time then return end
-    io.flush()
-end
-
-local function main()
-    create_output_directory()
-    initialize_datarefs()
-end
-
-main()
 do_every_draw('CAWR_show_ui()')
 do_on_mouse_click('CAWR_on_mouse_click()')
 do_often('CAWR_write_data()')
