@@ -85,6 +85,8 @@ end
 -- Constants
 local SECONDS_PER_MINUTE = 60
 local SECONDS_PER_HOUR = SECONDS_PER_MINUTE * 60
+local FLIGHTDATA_DIRECTORY_NAME = "flightdata"
+local OUTPUT_PATH_NAME =  SYSTEM_DIRECTORY .. 'Output/' .. FLIGHTDATA_DIRECTORY_NAME
 
 -- State
 local enable_auto_hide = true
@@ -131,11 +133,12 @@ local recOnA = 0.8
 local function start_recording()
     assert(recording_start_time == nil, "start_recording called in wrong state")
     recording_start_time = os.time()
-    print('recording_start_time=' .. recording_start_time)
     local times = os.date('*t', recording_start_time)
-    local output_filename = string.format("CAWR-%4d-%02d-%02d_%02d-%02d-%02d",
+    local output_filename = string.format("CAWR-%4d-%02d-%02d_%02d-%02d-%02d.csv",
         times.year, times.month, times.day, times.hour, times.min, times.sec)
-    print('output_filename=' .. output_filename)
+    io.output(OUTPUT_PATH_NAME .. "/" .. output_filename)
+    io.write('First line of output')
+    io.close()
 end
 
 local function toggle_recording_state()
@@ -210,15 +213,14 @@ end
 -- Creates the "Output/flightdata" directory if it doesn't exist.
 local function create_output_directory()
     local output_directory = SYSTEM_DIRECTORY .. "Output" -- X-plane Output
-    local flightdata_directory = "flightdata"
     local output_contents = directory_to_table(output_directory)
     for i, name in ipairs(output_contents) do
-        if name == flightdata_directory then
+        if name == FLIGHTDATA_DIRECTORY_NAME then
             return
         end
     end
     local mkdir_command = 'mkdir "' .. output_directory
-            .. '/' .. flightdata_directory .. '"'
+            .. '/' .. FLIGHTDATA_DIRECTORY_NAME .. '"'
     print('executing: ' .. mkdir_command)
     os.execute(mkdir_command)
 end
