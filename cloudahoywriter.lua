@@ -88,7 +88,7 @@ local SECONDS_PER_HOUR = SECONDS_PER_MINUTE * 60
 
 -- State
 local enable_auto_hide = true
-local flight_number = LUA_RUN
+local lua_run_counter = LUA_RUN -- Increments when aircraft or start position changes
 local recording_start_time = nil
 local recording_display_time = "0:00:00"
 
@@ -127,9 +127,20 @@ local recOnG = 0.2
 local recOnB = 0.2
 local recOnA = 0.8
 
+
+local function start_recording()
+    assert(recording_start_time == nil, "start_recording called in wrong state")
+    recording_start_time = os.time()
+    print('recording_start_time=' .. recording_start_time)
+    local times = os.date('*t', recording_start_time)
+    local output_filename = string.format("CAWR-%4d-%02d-%02d_%02d-%02d-%02d",
+        times.year, times.month, times.day, times.hour, times.min, times.sec)
+    print('output_filename=' .. output_filename)
+end
+
 local function toggle_recording_state()
     if recording_start_time == nil then
-        recording_start_time = os.clock()
+        start_recording()
     else
         recording_start_time = nil
     end
@@ -137,7 +148,7 @@ end
 
 local function get_recording_display_time()
     if recording_start_time == nil then return "0:00:00" end
-    local current_time = os.clock()
+    local current_time = os.time()
 
     local elapsed_seconds = current_time - recording_start_time
     local hours = math.floor(elapsed_seconds / SECONDS_PER_HOUR)
