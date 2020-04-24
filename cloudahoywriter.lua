@@ -221,7 +221,7 @@ end
 
 
 
--------------------- CSV OUTPUT --------------------
+-------------------- DATA RECORDING --------------------
 local function write_csv_header(start_time)
     -- Metadata
     io.write('Metadata,CA_CSV.3\n')
@@ -311,7 +311,7 @@ local function create_output_directory()
     print('executing: ' .. mkdir_command)
     os.execute(mkdir_command)
 end
--------------------- CSV OUTPUT --------------------
+-------------------- DATA RECORDING --------------------
 
 
 
