@@ -38,17 +38,69 @@ local dataTable = {
         csvField='feet/ALT (GPS)',
         dataRefs={'sim/flightmodel/position/elevation'},
         varNames={'ELEVATION'},
-        conversion='CAWR_meters_to_feet'
+        conversion='CAWR_meters_to_feet',
     },
     {
         csvField='ft Baro/AltB',
         dataRefs={'sim/cockpit2/gauges/indicators/altitude_ft_pilot'},
         varNames={'CAWR_indAlt'},
     },
+    {
+        csvField='knots/GS',
+        dataRefs={'sim/flightmodel/position/groundspeed'},
+        varNames={'CAWR_groundSpeed'},
+        conversion='CAWR_mps_to_knots',
+    },
+    {
+        csvField='knots/IAS',
+        dataRefs={'sim/flightmodel/position/indicated_airspeed'},
+        varNames={'CAWR_indicatedSpeed'},
+    },
+    {
+        csvField='knots/TAS',
+        dataRefs={'sim/flightmodel/position/true_airspeed'},
+        varNames={'CAWR_trueSpeed'},
+        conversion='CAWR_mps_to_knots',
+    },
+    {
+        csvField='degrees/HDG',
+        dataRefs={'sim/flightmodel/position/mag_psi'},
+        varNames={'CAWR_heading'},
+    },
+    {
+        csvField='degrees/MagVar',
+        dataRefs={'sim/flightmodel/position/magnetic_variation'},
+        varNames={'CAWR_magVar'},
+    },
+    {
+        csvField='degrees/Pitch',
+        dataRefs={'sim/flightmodel/position/true_theta'},
+        varNames={'CAWR_degreesPitch'},
+    },
+    {
+        csvField='degrees/Roll',
+        dataRefs={'sim/flightmodel/position/true_phi'},
+        varNames={'CAWR_degreesRoll'},
+    },
+    {
+        csvField='degrees/Yaw',
+        dataRefs={'sim/flightmodel/position/beta'},
+        varNames={'CAWR_degreesYaw'},
+    },
+    {
+        csvField='degrees/TRK',
+        dataRefs={'sim/cockpit2/gauges/indicators/ground_track_mag_pilot'},
+        varNames={'CAWR_degreesTrack'},
+    },
+
 }
 
 function CAWR_meters_to_feet(meters)
     return meters * 3.281
+end
+
+function CAWR_mps_to_knots(mps)
+    return mps * 1.944
 end
 
 local function initialize_datarefs()
