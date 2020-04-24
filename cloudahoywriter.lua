@@ -76,18 +76,6 @@ local function initialize_datarefs()
     print('CAWR_indAlt=' .. CAWR_indAlt)
 end
 
-function CAWR_write_data()
-    if not recording_start_time then return end
-    print('--------------------------------------------------------------------')
-    print('CAWR_flightTimeSec=' .. CAWR_flightTimeSec)
-    print('CAWR_indAlt=' .. CAWR_indAlt)
-end
-
-function CAWR_do_sometimes()
-    if not recording_start_time then return end
-    io.flush()
-end
-
 -- Constants
 local SECONDS_PER_MINUTE = 60
 local SECONDS_PER_HOUR = SECONDS_PER_MINUTE * 60
@@ -256,6 +244,18 @@ local function create_output_directory()
     os.execute(mkdir_command)
 end
 
+function CAWR_write_data()
+    if not recording_start_time then return end
+    print('--------------------------------------------------------------------')
+    print('CAWR_flightTimeSec=' .. CAWR_flightTimeSec)
+    print('CAWR_indAlt=' .. CAWR_indAlt)
+end
+
+function CAWR_do_sometimes()
+    if not recording_start_time then return end
+    io.flush()
+end
+
 local function main()
     create_output_directory()
     initialize_datarefs()
@@ -264,5 +264,5 @@ end
 main()
 do_every_draw('CAWR_show_ui()')
 do_on_mouse_click('CAWR_on_mouse_click()')
-do_often('CAWR_write_data()')
+-- do_often('CAWR_write_data()')
 do_sometimes('CAWR_do_sometimes()')
