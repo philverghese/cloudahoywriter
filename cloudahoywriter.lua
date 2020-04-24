@@ -11,17 +11,21 @@ local versionNum = '0.0.1'
 
 require('graphics')
 
--- Constants
+-------------------- CONSTANTS --------------------
 local SECONDS_PER_MINUTE = 60
 local SECONDS_PER_HOUR = SECONDS_PER_MINUTE * 60
 local FLIGHTDATA_DIRECTORY_NAME = 'flightdata'
 local OUTPUT_PATH_NAME =  SYSTEM_DIRECTORY .. 'Output/' .. FLIGHTDATA_DIRECTORY_NAME
 
--- State
-local enable_auto_hide = true
-local lua_run_counter = LUA_RUN -- Increments when aircraft or start position changes
-local recording_start_time = nil
+-------------------- STATE --------------------
+local recording_start_os_time = nil
+local recording_start_sim_time = nil
+local recording_lua_run = nil
 local recording_display_time = '0:00:00'
+
+local function is_recording()
+    return recording_start_os_time ~= nil
+end
 
 -------------------- UI --------------------
 -- Bounds for control box
@@ -37,10 +41,9 @@ local centerY = y1 + ((y2 - y1) / 2)
 
 -- Returns recording display time shown in the UI.
 local function get_recording_display_time()
-    if recording_start_time == nil then return '0:00:00' end
-    local current_time = os.time()
+    if not is_recording() then return '0:00:00' end
 
-    local elapsed_seconds = current_time - recording_start_time
+    local elapsed_seconds = CAWR_flightTimeSec - recording_start_sim_time
     local hours = math.floor(elapsed_seconds / SECONDS_PER_HOUR)
     elapsed_seconds = elapsed_seconds - (hours * SECONDS_PER_HOUR)
     local minutes = math.floor(elapsed_seconds / SECONDS_PER_MINUTE)
@@ -76,9 +79,7 @@ local recOnA = 0.8
 
 -- Draws the UI box on th left edge. Runs on every draw.
 function CAWR_show_ui()
-    if enable_auto_hide and (MOUSE_X > width * 3) then
-        return
-    end
+    if MOUSE_X > width * 3 then return end
 
     XPLMSetGraphicsState(0, 0, 0, 1, 1, 0, 0)
 
@@ -97,7 +98,7 @@ function CAWR_show_ui()
     graphics.draw_line(x1, y1, x2, y1)
 
     -- Recording circle
-    if (recording_start_time ~= nil) then
+    if is_recording() then
         graphics.set_color(recOnR, recOnG, recOnB, recOnA)
         recording_display_time = get_recording_display_time()
     else
@@ -125,18 +126,25 @@ local function mps_to_knots(mps)
     return mps * 1.944
 end
 
+-- Converts sim/time/total_flight_time_sec to a time that's relative
+-- to recording_start_time. sim/time/total_flight_time_sec resets to 0
+-- when the aircraft or position is changed by the user.
+local function simTime_to_recordingTime(simTime)
+    return simTime - recording_start_sim_time
+end
+
 -- Data Table
 --   Structure
 --      - csvField: name of CloudAhoy CSV field
 --      - dataRef: name of X-Plane dataref
---      - varName: name of variable mapped to the dataRef.
+--      - varName: name of variable mapped to the dataRef
 --      - conversion: optional function to convert units from dataRef to CSV
---                        (e.g. meters to feet). Only one per csvField.
 local dataTable = {
     {
         csvField='seconds/t',
         dataRef='sim/time/total_flight_time_sec',
         varName='CAWR_flightTimeSec',
+        conversion=simTime_to_recordingTime,
     },
     {
         csvField='degrees/LAT',
@@ -216,6 +224,8 @@ local function initialize_datarefs()
             DataRef(v.varName, v.dataRef)
         end
     end
+
+    DataRef('CAWR_isPaused','sim/time/paused')
 end
 -------------------- X-PLANE DATA  --------------------
 
@@ -240,7 +250,7 @@ local function write_csv_header(start_time)
 end
 
 local function start_recording()
-    assert(recording_start_time == nil, 'start_recording called in wrong state')
+    assert(not is_recording(), 'start_recording called in wrong state')
     local start_time = os.time()
     local times = os.date('*t', start_time)
     local output_filename = string.format('CAWR-%4d-%02d-%02d_%02d-%02d-%02d.csv',
@@ -250,20 +260,22 @@ local function start_recording()
 
     -- Don't set this until the header is written to avoid a race with the code that
     -- writes the data after the header.
-    recording_start_time = start_time
+    recording_start_os_time = start_time
+    recording_start_sim_time = CAWR_flightTimeSec
+    recording_lua_run = LUA_RUN -- Increments when aircraft or start position changes
 end
 
 local function stop_recording()
-    assert(recording_start_time ~= nil, 'stop_recording called in wrong state')
-    recording_start_time = nil
+    assert(is_recording(), 'stop_recording called in wrong state')
+    recording_start_os_time = nil
     io.close()
 end
 
 local function toggle_recording_state()
-    if recording_start_time == nil then
-        start_recording()
-    else
+    if is_recording() then
         stop_recording()
+    else
+        start_recording()
     end
 end
 
@@ -280,7 +292,14 @@ end
 
 -- Writes to output file. Runs every second.
 function CAWR_write_data()
-    if not recording_start_time then return end
+    -- TODO: Check for change in LUA_RUN and handle it.
+       -- Start a new recording if we're in the middle of one
+       -- Reset time vars maybe
+       -- Maybe do the same type of handling for a big location change when the
+       --   user manually repositions the aircraft using the map.
+
+
+    if not is_recording() or CAWR_isPaused == 1 then return end
     local trailing_char = ','
     for i,v in ipairs(dataTable) do
         if i == #dataTable then trailing_char = '\n' end
@@ -293,7 +312,7 @@ end
 
 -- Runs every 10 seconds
 function CAWR_do_sometimes()
-    if not recording_start_time then return end
+    if not is_recording() then return end
     io.flush()
 end
 
