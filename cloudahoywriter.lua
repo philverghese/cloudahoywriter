@@ -16,22 +16,34 @@ require('graphics')
 --      - varNames: names of variables mapped to the dataRefs. Must be same
 --                      length as dataRefs. These are globals, so prefix with
 --                      CAWR_.
---      - conversion: function to convert units from datarefs to CSV
+--      - conversion: optional function to convert units from datarefs to CSV
 --                        (e.g. meters to feet). Only one per csvField.
 local dataTable = {
     {
         csvField='seconds/t',
         dataRefs={'sim/time/total_flight_time_sec'},
         varNames={'CAWR_flightTimeSec'},
-        conversion='CAWR_identity',
+    },
+    {
+        csvField='degrees/LAT',
+        dataRefs={'sim/flightmodel/position/latitude'},
+        varNames={'LATITUDE'},
+    },
+    {
+        csvField='degrees/LON',
+        dataRefs={'sim/flightmodel/position/longitude'},
+        varNames={'LONGITUDE'},
+    },
+    {
+        csvField='feet/ALT (GPS)',
+        dataRefs={'sim/flightmodel/position/elevation'},
+        varNames={'ELEVATION'},
+        conversion='CAWR_meters_to_feet'
     },
     {
         csvField='ft Baro/AltB',
-        dataRefs={'sim/cockpit2/gauges/indicators/altitude_ft_pilot',
-            'sim/flightmodel/misc/h_ind'},
-        varNames={'CAWR_indAlt',
-            'CAWR_flightModelAlt'},
-        conversion='CAWR_identity',
+        dataRefs={'sim/cockpit2/gauges/indicators/altitude_ft_pilot'},
+        varNames={'CAWR_indAlt'},
     },
 }
 
@@ -42,17 +54,27 @@ local function initialize_datarefs()
         for i=1,#v.dataRefs do
             print('  dataRef=' .. v.dataRefs[i])
             print('  varName=' .. v.varNames[i])
-            DataRef(v.varNames[i], v.dataRefs[i])
+            if string.find(v.varNames[i], 'CAWR_') then
+                -- Only register variables that start with our prefix. Some dataRefs
+                -- we want are already registered by FWL (e.g. ELEVATION, LATITUDE).
+                DataRef(v.varNames[i], v.dataRefs[i])
+            end
         end
-        print('  conversion=' .. v.conversion)
+        if v.conversion then print('  conversion=' .. v.conversion) end
     end
 
     print('CAWR_flightTimeSec=' .. CAWR_flightTimeSec)
     print('CAWR_indAlt=' .. CAWR_indAlt)
-    print('CAWR_flightModelAlt=' .. CAWR_flightModelAlt)
+    print('LATITUDE=' .. LATITUDE)
+    print('LONGITUDE=' .. LONGITUDE)
+    print('ELEVATION=' .. ELEVATION)
+    print('CAWR_indAlt=' .. CAWR_indAlt)
 end
 
 function CAWR_write_data()
+    print('--------------------------------------------------------------------')
+    print('CAWR_flightTimeSec=' .. CAWR_flightTimeSec)
+    print('CAWR_indAlt=' .. CAWR_indAlt)
 end
 
 -- Constants
@@ -193,4 +215,4 @@ end
 main()
 do_every_draw("CAWR_show_ui()")
 do_on_mouse_click("CAWR_on_mouse_click()")
--- do_often("CAWR_write_data()")
+--do_often("CAWR_write_data()")
