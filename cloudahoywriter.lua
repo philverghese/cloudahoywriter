@@ -246,9 +246,16 @@ end
 
 function CAWR_write_data()
     if not recording_start_time then return end
-    print('--------------------------------------------------------------------')
-    print('CAWR_flightTimeSec=' .. CAWR_flightTimeSec)
-    print('CAWR_indAlt=' .. CAWR_indAlt)
+    local trailing_char = ','
+    for i,v in ipairs(dataTable) do
+        if i == #dataTable then trailing_char = '\n' end
+        -- TODO: handle multiple data values and finding the best one
+        --       This is always going to pick the first one.
+        local data_value = _G[v.varNames[1]] or 0
+        if v.conversion then data_value = _G[v.conversion](data_value) end
+        io.write(data_value)
+        io.write(trailing_char)
+    end
 end
 
 function CAWR_do_sometimes()
@@ -264,5 +271,5 @@ end
 main()
 do_every_draw('CAWR_show_ui()')
 do_on_mouse_click('CAWR_on_mouse_click()')
--- do_often('CAWR_write_data()')
+do_often('CAWR_write_data()')
 do_sometimes('CAWR_do_sometimes()')
