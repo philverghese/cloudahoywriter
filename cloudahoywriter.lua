@@ -12,12 +12,14 @@ local versionNum = '0.0.1'
 require('graphics')
 
 -------------------- CONSTANTS --------------------
+local LOG_INTERVAL_SECS = 0.3
 local SECONDS_PER_MINUTE = 60
 local SECONDS_PER_HOUR = SECONDS_PER_MINUTE * 60
 local FLIGHTDATA_DIRECTORY_NAME = 'flightdata'
 local OUTPUT_PATH_NAME =  SYSTEM_DIRECTORY .. 'Output/' .. FLIGHTDATA_DIRECTORY_NAME
 
 -------------------- STATE --------------------
+local lastWriteTime = nil
 local recordingStartOsTime = nil
 local recordingStartSimTime = nil
 local recordingLuaRun = nil
@@ -79,8 +81,12 @@ local recOnG = 0.2
 local recOnB = 0.2
 local recOnA = 0.8
 
--- Draws the UI box on th left edge. Runs on every draw.
-function CAWR_show_ui()
+local maybe_write_data -- forward declaration
+
+-- Runs on every draw. May write to file. May show UI.
+function CAWR_on_every_draw()
+    maybe_write_data()
+
     if MOUSE_X > width * 3 then return end
 
     XPLMSetGraphicsState(0, 0, 0, 1, 1, 0, 0)
@@ -293,8 +299,8 @@ function CAWR_on_mouse_click()
     RESUME_MOUSE_CLICK = true -- consume click
 end
 
--- Writes to output file. Runs every second.
-function CAWR_write_data()
+-- Writes to output file. 
+local function write_data()
     if not is_recording() then return end
 
     -- TODO: Check for change in LUA_RUN and handle it.
@@ -316,6 +322,15 @@ function CAWR_write_data()
         io.write(trailingChar)
     end
 end
+
+-- Called from show_ui() on every draw. Keep this fast.
+function maybe_write_data()
+    if not is_recording() then return end
+    if lastWriteTime and (os.clock() - lastWriteTime < LOG_INTERVAL_SECS) then return end
+    write_data()
+    lastWriteTime = os.clock()
+end
+
 
 -- Runs every 10 seconds
 function CAWR_do_sometimes()
@@ -350,7 +365,6 @@ initialize_datarefs()
 
 
 -------------------- FlyWithLua HOOKS --------------------
-do_every_draw('CAWR_show_ui()')
+do_every_draw('CAWR_on_every_draw()')
 do_on_mouse_click('CAWR_on_mouse_click()')
-do_often('CAWR_write_data()')
 do_sometimes('CAWR_do_sometimes()')
