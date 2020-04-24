@@ -77,27 +77,33 @@ local function initialize_datarefs()
 end
 
 function CAWR_write_data()
+    if not recording_start_time then return end
     print('--------------------------------------------------------------------')
     print('CAWR_flightTimeSec=' .. CAWR_flightTimeSec)
     print('CAWR_indAlt=' .. CAWR_indAlt)
 end
 
+function CAWR_do_sometimes()
+    if not recording_start_time then return end
+    io.flush()
+end
+
 -- Constants
 local SECONDS_PER_MINUTE = 60
 local SECONDS_PER_HOUR = SECONDS_PER_MINUTE * 60
-local FLIGHTDATA_DIRECTORY_NAME = "flightdata"
+local FLIGHTDATA_DIRECTORY_NAME = 'flightdata'
 local OUTPUT_PATH_NAME =  SYSTEM_DIRECTORY .. 'Output/' .. FLIGHTDATA_DIRECTORY_NAME
 
 -- State
 local enable_auto_hide = true
 local lua_run_counter = LUA_RUN -- Increments when aircraft or start position changes
 local recording_start_time = nil
-local recording_display_time = "0:00:00"
+local recording_display_time = '0:00:00'
 
 -- Bounds for control box
-local width = measure_string("X9:99:99X")
+local width = measure_string('X9:99:99X')
 local height = 90
-local cawr_width = measure_string("CAWR")
+local cawr_width = measure_string('CAWR')
 local x1 = 0
 local x2 = x1 + width
 local y1 = (SCREEN_HIGHT / 2) - 50
@@ -129,15 +135,40 @@ local recOnG = 0.2
 local recOnB = 0.2
 local recOnA = 0.8
 
+local function write_csv_header(start_time)
+    -- Metadata
+    io.write('Metadata,CA_CSV.3\n')
+    io.write(string.format('GMT,%d\n', start_time))
+    io.write('TAIL,*UNK\n')
+    io.write('GPS,XPlane\n')
+    io.write('ISSIM,1\n')
+    io.write('DATA,\n')
+
+    -- Column identifiers
+    local trailing_char = ','
+    for i,v in ipairs(dataTable) do
+        if i == #dataTable then trailing_char = '\n' end
+        io.write(string.format('%s%s', v.csvField, trailing_char))
+    end
+end
 
 local function start_recording()
-    assert(recording_start_time == nil, "start_recording called in wrong state")
-    recording_start_time = os.time()
-    local times = os.date('*t', recording_start_time)
-    local output_filename = string.format("CAWR-%4d-%02d-%02d_%02d-%02d-%02d.csv",
+    assert(recording_start_time == nil, 'start_recording called in wrong state')
+    local start_time = os.time()
+    local times = os.date('*t', start_time)
+    local output_filename = string.format('CAWR-%4d-%02d-%02d_%02d-%02d-%02d.csv',
         times.year, times.month, times.day, times.hour, times.min, times.sec)
-    io.output(OUTPUT_PATH_NAME .. "/" .. output_filename)
-    io.write('First line of output')
+    io.output(OUTPUT_PATH_NAME .. '/' .. output_filename)
+    write_csv_header(start_time)
+
+    -- Don't set this until the header is written to avoid a race with the code that
+    -- writes the data after the header.
+    recording_start_time = start_time
+end
+
+local function stop_recording()
+    assert(recording_start_time ~= nil, 'stop_recording called in wrong state')
+    recording_start_time = nil
     io.close()
 end
 
@@ -145,12 +176,12 @@ local function toggle_recording_state()
     if recording_start_time == nil then
         start_recording()
     else
-        recording_start_time = nil
+        stop_recording()
     end
 end
 
 local function get_recording_display_time()
-    if recording_start_time == nil then return "0:00:00" end
+    if recording_start_time == nil then return '0:00:00' end
     local current_time = os.time()
 
     local elapsed_seconds = current_time - recording_start_time
@@ -160,7 +191,7 @@ local function get_recording_display_time()
     elapsed_seconds = elapsed_seconds - (minutes * SECONDS_PER_MINUTE)
     local seconds = math.floor(elapsed_seconds)
 
-    return string.format("%01d:%02d:%02d", hours, minutes, seconds)
+    return string.format('%01d:%02d:%02d', hours, minutes, seconds)
 end
 
 function CAWR_show_ui()
@@ -176,7 +207,7 @@ function CAWR_show_ui()
 
     -- Foreground lines and text
     graphics.set_color(fgR, fgG, fgB, fgA)
-    draw_string(centerX - (cawr_width / 2), y2 - 16, "CAWR")
+    draw_string(centerX - (cawr_width / 2), y2 - 16, 'CAWR')
     graphics.set_width(2)
     graphics.draw_line(x1, y2, x2, y2)
     graphics.draw_line(x1, y2 - 30, x2, y2 - 30)
@@ -210,9 +241,9 @@ function CAWR_on_mouse_click()
     RESUME_MOUSE_CLICK = true -- consume click
 end
 
--- Creates the "Output/flightdata" directory if it doesn't exist.
+-- Creates the 'Output/flightdata' directory if it doesn't exist.
 local function create_output_directory()
-    local output_directory = SYSTEM_DIRECTORY .. "Output" -- X-plane Output
+    local output_directory = SYSTEM_DIRECTORY .. 'Output' -- X-plane Output
     local output_contents = directory_to_table(output_directory)
     for i, name in ipairs(output_contents) do
         if name == FLIGHTDATA_DIRECTORY_NAME then
@@ -231,6 +262,7 @@ local function main()
 end
 
 main()
-do_every_draw("CAWR_show_ui()")
-do_on_mouse_click("CAWR_on_mouse_click()")
---do_often("CAWR_write_data()")
+do_every_draw('CAWR_show_ui()')
+do_on_mouse_click('CAWR_on_mouse_click()')
+do_often('CAWR_write_data()')
+do_sometimes('CAWR_do_sometimes()')
