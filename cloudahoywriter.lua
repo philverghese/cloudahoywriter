@@ -147,8 +147,8 @@ end
 --      - dataRef: name of X-Plane dataref
 --      - varName: name of variable mapped to the dataRef
 --      - conversion: optional function to convert units from dataRef to CSV
+--      - arrayIndex: index to look at for array datarefs
 local dataTable = {
-    -- TODO: More things to log based on sample data
     {
         csvField='seconds/t',
         dataRef='sim/time/total_flight_time_sec',
@@ -209,6 +209,16 @@ local dataTable = {
         varName='CAWR_magVar',
     },
     {
+        csvField='degrees/WndDr',
+        dataRef='sim/weather/wind_direction_degt',
+        varName='CAWR_windDirection',
+    },
+    {
+        csvField='knots/WndSpd',
+        dataRef='sim/weather/wind_speed_kt',
+        varName='CAWR_windSpeed',
+    },
+    {
         csvField='degrees/Pitch',
         dataRef='sim/flightmodel/position/true_theta',
         varName='CAWR_degreesPitch',
@@ -223,6 +233,36 @@ local dataTable = {
         dataRef='sim/flightmodel/position/beta',
         varName='CAWR_degreesYaw',
     },
+    {
+        csvField='fpm/VS',
+        dataRef='sim/cockpit2/gauges/indicators/vvi_fpm_pilot',
+        varName='CAWR_verticalSpeed',
+    },
+    {
+        csvField='degrees/flaps',
+        dataRef='sim/flightmodel2/wing/flap1_deg',
+        varName='CAWR_flapDegrees',
+        arrayIndex=0,
+    },
+    {
+        csvField='down/gear',
+        dataRef='sim/flightmodel2/gear/deploy_ratio',
+        varName='CAWR_gearDown',
+    },
+    {
+        csvField='rpm/E1 RPM',
+        dataRef='sim/cockpit2/engine/indicators/prop_speed_rpm',
+        varName='CAWR_propRpm1',
+        arrayIndex=0,
+    },
+    {
+        csvField='in hg/E1 MAP',
+        dataRef='sim/cockpit2/engine/indicators/MPR_in_hg',
+        varName='CAWR_manPres1',
+    },
+    -- TODO: Support multi-engine w/ RPM & MAP
+
+    -- TODO: Add CDI fields fsd/HCDI, fsd/VCDI
 }
 
 local function initialize_datarefs()
@@ -230,7 +270,11 @@ local function initialize_datarefs()
         if string.find(v.varName, 'CAWR_') then
             -- Only register variables that start with our prefix. Some dataRefs
             -- we want are already registered by FWL (e.g. ELEVATION, LATITUDE).
-            DataRef(v.varName, v.dataRef)
+            if not v.arrayIndex then 
+                DataRef(v.varName, v.dataRef)
+            else
+                DataRef(v.varName, v.dataRef, "readonly", v.arrayIndex)
+            end
         end
     end
 
