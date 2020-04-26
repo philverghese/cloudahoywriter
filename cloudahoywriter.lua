@@ -6,8 +6,11 @@
 -- Code conventions
 --  - Use local when possible
 --  - Globals are prefixed with CAWR_
+--  - Method names use_underscores
+--  - Variable names useCamelCase
+--  - Constant names are CAPITAL_WITH_UNDERSCORE
 -----------------------------------------------
-local versionNum = '0.0.1'
+local versionNum = '0.0.2'
 
 require('graphics')
 
