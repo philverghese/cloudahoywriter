@@ -18,6 +18,7 @@ require('graphics')
 local LOG_INTERVAL_SECS = 0.3
 local SECONDS_PER_MINUTE = 60
 local SECONDS_PER_HOUR = SECONDS_PER_MINUTE * 60
+local NOTIFICATION_SECS = 5
 local FLIGHTDATA_DIRECTORY_NAME = 'flightdata'
 local OUTPUT_PATH_NAME =  SYSTEM_DIRECTORY .. 'Output/' .. FLIGHTDATA_DIRECTORY_NAME
 
@@ -26,9 +27,23 @@ local lastWriteTime = nil
 local recordingStartOsTime = nil
 local recordingStartSimTime = nil
 local recordingDisplayTime = '0:00:00'
+local recordingNotifyNewRecordingTimeEnd = nil
 
 local function is_recording()
     return recordingStartOsTime ~= nil
+end
+
+local function notify_auto_start_recording()
+    recordingNotifyNewRecordingTimeEnd = os.time + NOTIFICATION_SECS
+end
+
+local function should_show_new_recording_notification()
+    if not recordingNotifyNewRecordingTimeEnd then return false end
+    if os.time() > recordingNotifyNewRecordingTimeEnd then
+        recordingNotifyNewRecordingTimeEnd = nil
+        return false
+    end
+    return true
 end
 
 
@@ -89,9 +104,16 @@ local maybe_write_data -- forward declaration
 function CAWR_on_every_draw()
     maybe_write_data()
 
-    if MOUSE_X > width * 3 then return end
+    if MOUSE_X > width * 3
+            and not should_show_new_recording_notification() then
+        return
+    end
 
     XPLMSetGraphicsState(0, 0, 0, 1, 1, 0, 0)
+
+    if should_show_new_recording_notification() then
+        big_bubble(x1 + 20, y2, "CloudAhoy Writer", "Recording automatically started")
+    end
 
     -- Background rectangle
     graphics.set_color(bgR, bgG, bgB, bgA)
