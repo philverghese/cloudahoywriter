@@ -25,7 +25,6 @@ local OUTPUT_PATH_NAME =  SYSTEM_DIRECTORY .. 'Output/' .. FLIGHTDATA_DIRECTORY_
 local lastWriteTime = nil
 local recordingStartOsTime = nil
 local recordingStartSimTime = nil
-local recordingLuaRun = nil
 local recordingDisplayTime = '0:00:00'
 
 local function is_recording()
@@ -318,7 +317,6 @@ local function start_recording()
     -- writes the data after the header.
     recordingStartOsTime = startTime
     recordingStartSimTime = CAWR_flightTimeSec
-    recordingLuaRun = LUA_RUN -- Increments when aircraft or start position changes
 end
 
 local function stop_recording()
@@ -350,11 +348,9 @@ end
 local function write_data()
     if not is_recording() then return end
 
-    -- TODO: Check for change in LUA_RUN and handle it.
+    -- TODO: Maybe handle big location change when the user manually repositions aircraft using map.
        -- Start a new recording if we're in the middle of one
        -- Reset time vars maybe
-       -- Maybe do the same type of handling for a big location change when the
-       --   user manually repositions the aircraft using the map.
 
     --TODO: Check sim/flightmodel2/misc/has_crashed to detect if the simulated
     --          airplane has had a simulated crash. Stop recording when that happens?
