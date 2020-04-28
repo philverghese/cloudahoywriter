@@ -18,7 +18,15 @@ require('graphics')
 local LOG_INTERVAL_SECS = 0.3
 local SECONDS_PER_MINUTE = 60
 local SECONDS_PER_HOUR = SECONDS_PER_MINUTE * 60
-local NOTIFICATION_SECS = 5
+local NOTIFICATION_SECS = 10
+-- Start or stop recording when ground speed crosses this speed.
+local AUTO_RECORDING_GROUND_SPEED_MPS = 3 -- Dataref is in m/s
+-- Stop recording when the ground speed has been below the speed above
+-- for more thsn this time.
+local AUTO_STOP_TIME_SECS = 10 * SECONDS_PER_MINUTE
+-- Disable automatic recording state change within this many seconds of the
+-- making a state change.
+local AUTO_RECORDING_DISABLE_SECS = 5 * SECONDS_PER_MINUTE
 local FLIGHTDATA_DIRECTORY_NAME = 'flightdata'
 local OUTPUT_PATH_NAME =  SYSTEM_DIRECTORY .. 'Output/' .. FLIGHTDATA_DIRECTORY_NAME
 
@@ -27,20 +35,25 @@ local lastWriteTime = nil
 local recordingStartOsTime = nil
 local recordingStartSimTime = nil
 local recordingDisplayTime = '0:00:00'
-local recordingNotifyNewRecordingTimeEnd = nil
+local recordingNotifyStateChangeTimeEnd = nil
+-- Time when groundspeed was low. Will stop once the AUTO_STOP_TIME_SECS elapses.
+local autoStopLowSpeedTime = nil
+-- Time when the user last changed recording state manually.
+-- No automatic changes until AUTO_RECORDING_DISABLE_SECS elapses
+local userRecordingStateChangeTime = nil
 
 local function is_recording()
     return recordingStartOsTime ~= nil
 end
 
-local function notify_auto_start_recording()
-    recordingNotifyNewRecordingTimeEnd = os.time + NOTIFICATION_SECS
+local function notify_recording_state_change()
+    recordingNotifyStateChangeTimeEnd = os.time() + NOTIFICATION_SECS
 end
 
-local function should_show_new_recording_notification()
-    if not recordingNotifyNewRecordingTimeEnd then return false end
-    if os.time() > recordingNotifyNewRecordingTimeEnd then
-        recordingNotifyNewRecordingTimeEnd = nil
+local function should_show_recording_state_change()
+    if not recordingNotifyStateChangeTimeEnd then return false end
+    if os.time() > recordingNotifyStateChangeTimeEnd then
+        recordingNotifyStateChangeTimeEnd = nil
         return false
     end
     return true
@@ -98,22 +111,21 @@ local recOnG = 0.2
 local recOnB = 0.2
 local recOnA = 0.8
 
-local maybe_write_data -- forward declaration
+-- forward declarations
+local maybe_write_data 
+local automatic_recording_state_check
 
 -- Runs on every draw. May write to file. May show UI.
 function CAWR_on_every_draw()
+    automatic_recording_state_check()
     maybe_write_data()
 
     if MOUSE_X > width * 3
-            and not should_show_new_recording_notification() then
+            and not should_show_recording_state_change() then
         return
     end
 
     XPLMSetGraphicsState(0, 0, 0, 1, 1, 0, 0)
-
-    if should_show_new_recording_notification() then
-        big_bubble(x1 + 20, y2, "CloudAhoy Writer", "Recording automatically started")
-    end
 
     -- Background rectangle
     graphics.set_color(bgR, bgG, bgB, bgA)
@@ -291,10 +303,10 @@ local dataTable = {
 
 local function initialize_datarefs()
     for i,v in ipairs(dataTable) do
+        -- Only register variables that start with our prefix. Some dataRefs
+        -- we want are already registered by FWL (e.g. ELEVATION, LATITUDE).
         if string.find(v.varName, 'CAWR_') then
-            -- Only register variables that start with our prefix. Some dataRefs
-            -- we want are already registered by FWL (e.g. ELEVATION, LATITUDE).
-            if not v.arrayIndex then 
+            if not v.arrayIndex then
                 DataRef(v.varName, v.dataRef)
             else
                 DataRef(v.varName, v.dataRef, "readonly", v.arrayIndex)
@@ -347,7 +359,8 @@ local function stop_recording()
     io.close()
 end
 
-local function toggle_recording_state()
+local function user_toggle_recording_state()
+    userRecordingStateChangeTime = os.time()
     if is_recording() then
         stop_recording()
     else
@@ -360,7 +373,7 @@ function CAWR_on_mouse_click()
     if MOUSE_X < x1 or MOUSE_X > x2 then return end
     if MOUSE_Y < y1 or MOUSE_Y > y2 then return end
     if MOUSE_STATUS == 'up' then
-        toggle_recording_state()
+        user_toggle_recording_state()
     end
 
     RESUME_MOUSE_CLICK = true -- consume click
@@ -396,6 +409,39 @@ function maybe_write_data()
     lastWriteTime = os.clock()
 end
 
+-- Called from show_ui() on every draw. Keep this fast.
+-- Decides whether to automatically start or stop recording.
+function automatic_recording_state_check()
+    if not CAWR_groundSpeed then
+        return -- Possible race with registering datarefs
+    end
+    local currentTime = os.time()
+    if userRecordingStateChangeTime
+        and currentTime < userRecordingStateChangeTime + AUTO_RECORDING_DISABLE_SECS then
+        -- Disable automatic state changes due to recent user action.
+        return
+    end
+    if is_recording() then
+        if CAWR_groundSpeed < AUTO_RECORDING_GROUND_SPEED_MPS then
+            autoStopLowSpeedTime = autoStopLowSpeedTime
+                or currentTime + AUTO_STOP_TIME_SECS
+            if currentTime > autoStopLowSpeedTime then
+                print('CAWR_debug: automatically stopping recording')
+                autoStopLowSpeedTime = nil
+                -- Update the total time string display before stopping
+                recordingDisplayTime = get_recording_display_time()
+                stop_recording()
+                notify_recording_state_change()
+            end
+        end
+    else -- not recording
+        if CAWR_groundSpeed > AUTO_RECORDING_GROUND_SPEED_MPS then
+            print('CAWR_debug: automatically START recording')
+            start_recording()
+            notify_recording_state_change()
+        end
+    end
+end
 
 -- Runs every 10 seconds
 function CAWR_do_sometimes()
