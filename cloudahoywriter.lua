@@ -412,9 +412,12 @@ end
 -- Called from show_ui() on every draw. Keep this fast.
 -- Decides whether to automatically start or stop recording.
 function automatic_recording_state_check()
+    if CAWR_isPaused == 1 then return end
+
     if not CAWR_groundSpeed then
         return -- Possible race with registering datarefs
     end
+
     local currentTime = os.time()
     if userRecordingStateChangeTime
         and currentTime < userRecordingStateChangeTime + AUTO_RECORDING_DISABLE_SECS then
