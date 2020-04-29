@@ -75,7 +75,7 @@ local maybe_write_data
 local automatic_recording_state_check
 
 -- Runs on every frame. Has full access to datarefs. May write to file.
--- No drawing methods allows.
+-- No drawing methods allowed.
 function CAWR_on_every_frame()
     automatic_recording_state_check()
     maybe_write_data()
