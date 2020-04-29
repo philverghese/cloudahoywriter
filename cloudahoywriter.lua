@@ -9,6 +9,8 @@
 --  - Method names use_underscores
 --  - Variable names useCamelCase
 --  - Constant names are CAPITAL_WITH_UNDERSCORE
+--  - Use simulator time in general (CAWR_flightTimeSec) and name vars
+--       as xSimTime. When real time (os.time()) is used, name vars as xOsTime.
 -----------------------------------------------
 local versionNum = '0.0.2'
 
@@ -18,7 +20,8 @@ require('graphics')
 local LOG_INTERVAL_SECS = 0.3
 local SECONDS_PER_MINUTE = 60
 local SECONDS_PER_HOUR = SECONDS_PER_MINUTE * 60
-local NOTIFICATION_SECS = 10
+local NOTIFICATION_SECS = 10 -- Default time to show UI notifications
+
 -- Start or stop recording when ground speed crosses this speed.
 local AUTO_RECORDING_GROUND_SPEED_MPS = 3 -- Dataref is in m/s
 -- Stop recording when the ground speed has been below the speed above
@@ -31,33 +34,55 @@ local FLIGHTDATA_DIRECTORY_NAME = 'flightdata'
 local OUTPUT_PATH_NAME =  SYSTEM_DIRECTORY .. 'Output/' .. FLIGHTDATA_DIRECTORY_NAME
 
 -------------------- STATE --------------------
-local lastWriteTime = nil
+local lastWriteSimTime = nil
+-- Operating system time that recording started (real clock)
 local recordingStartOsTime = nil
+-- Flight time when recording started (pauses when sim pauses)
 local recordingStartSimTime = nil
 local recordingDisplayTime = '0:00:00'
-local recordingNotifyStateChangeTimeEnd = nil
+-- True if the UI should be forced to show
+local forceShowUi = false
+-- Time when the UI will no longer be forced to show.
+local forceShowUiSimTimeEnd = nil
 -- Time when groundspeed was low. Will stop once the AUTO_STOP_TIME_SECS elapses.
-local autoStopLowSpeedTime = nil
+local autoStopLowSpeedSimTime = nil
 -- Time when the user last changed recording state manually.
 -- No automatic changes until AUTO_RECORDING_DISABLE_SECS elapses
-local userRecordingStateChangeTime = nil
+local userRecordingStateChangeSimTime = nil
 
 local function is_recording()
     return recordingStartOsTime ~= nil
 end
 
-local function notify_recording_state_change()
-    recordingNotifyStateChangeTimeEnd = os.time() + NOTIFICATION_SECS
+-- Force the UI to display for some seconds.
+local function force_show_ui_secs(secondsToShow)
+    secondsToShow = secondsToShow or NOTIFICATION_SECS
+    forceShowUiSimTimeEnd = CAWR_flightTimeSec + secondsToShow
 end
 
-local function should_show_recording_state_change()
-    if not recordingNotifyStateChangeTimeEnd then return false end
-    if os.time() > recordingNotifyStateChangeTimeEnd then
-        recordingNotifyStateChangeTimeEnd = nil
+-- Returns true if the UI should be forced on.
+local function should_force_show_ui()
+    if not forceShowUiSimTimeEnd then return false end
+    if CAWR_flightTimeSec > forceShowUiSimTimeEnd then
+        forceShowUiSimTimeEnd = nil
         return false
     end
     return true
 end
+
+-- forward declarations
+local maybe_write_data 
+local automatic_recording_state_check
+
+-- Runs on every frame. Has full access to datarefs. May write to file.
+-- No drawing methods allows.
+function CAWR_on_every_frame()
+    automatic_recording_state_check()
+    maybe_write_data()
+    forceShowUi = should_force_show_ui()
+end
+-------------------- STATE --------------------
+
 
 
 
@@ -111,17 +136,10 @@ local recOnG = 0.2
 local recOnB = 0.2
 local recOnA = 0.8
 
--- forward declarations
-local maybe_write_data 
-local automatic_recording_state_check
-
--- Runs on every draw. May write to file. May show UI.
+-- Runs on every draw. Show UI when appropriate. Do not read or write datarefs.
+-- Put frequent dataref access in CAWR_on_every_frame().
 function CAWR_on_every_draw()
-    automatic_recording_state_check()
-    maybe_write_data()
-
-    if MOUSE_X > width * 3
-            and not should_show_recording_state_change() then
+    if MOUSE_X > width * 3 and not forceShowUi then
         return
     end
 
@@ -360,7 +378,7 @@ local function stop_recording()
 end
 
 local function user_toggle_recording_state()
-    userRecordingStateChangeTime = os.time()
+    userRecordingStateChangeSimTime = CAWR_flightTimeSec
     if is_recording() then
         stop_recording()
     else
@@ -401,47 +419,49 @@ local function write_data()
     end
 end
 
--- Called from show_ui() on every draw. Keep this fast.
+-- Called from CAWR_on_every_frame. Keep this fast.
 function maybe_write_data()
     if not is_recording() then return end
-    if lastWriteTime and (os.clock() - lastWriteTime < LOG_INTERVAL_SECS) then return end
+    if lastWriteSimTime and (CAWR_flightTimeSec - lastWriteSimTime < LOG_INTERVAL_SECS) then return end
     write_data()
-    lastWriteTime = os.clock()
+    lastWriteSimTime = CAWR_flightTimeSec
 end
 
--- Called from show_ui() on every draw. Keep this fast.
+-- Called from CAWR_on_every_frame. Keep this fast.
 -- Decides whether to automatically start or stop recording.
 function automatic_recording_state_check()
     if CAWR_isPaused == 1 then return end
 
-    if not CAWR_groundSpeed then
-        return -- Possible race with registering datarefs
+    -- If we were counting down until automatically stopping, reset
+    -- the clock when the airplane moves again.
+    if CAWR_groundSpeed > AUTO_RECORDING_GROUND_SPEED_MPS then
+        autoStopLowSpeedSimTime = nil
     end
 
-    local currentTime = os.time()
-    if userRecordingStateChangeTime
-        and currentTime < userRecordingStateChangeTime + AUTO_RECORDING_DISABLE_SECS then
+    local currentSimTime = CAWR_flightTimeSec
+    if userRecordingStateChangeSimTime
+        and currentSimTime < userRecordingStateChangeSimTime + AUTO_RECORDING_DISABLE_SECS then
         -- Disable automatic state changes due to recent user action.
         return
     end
     if is_recording() then
         if CAWR_groundSpeed < AUTO_RECORDING_GROUND_SPEED_MPS then
-            autoStopLowSpeedTime = autoStopLowSpeedTime
-                or currentTime + AUTO_STOP_TIME_SECS
-            if currentTime > autoStopLowSpeedTime then
+            autoStopLowSpeedSimTime = autoStopLowSpeedSimTime
+                or currentSimTime + AUTO_STOP_TIME_SECS
+            if currentSimTime > autoStopLowSpeedSimTime then
                 print('CAWR_debug: automatically stopping recording')
-                autoStopLowSpeedTime = nil
+                autoStopLowSpeedSimTime = nil
                 -- Update the total time string display before stopping
                 recordingDisplayTime = get_recording_display_time()
                 stop_recording()
-                notify_recording_state_change()
+                force_show_ui_secs()
             end
         end
     else -- not recording
         if CAWR_groundSpeed > AUTO_RECORDING_GROUND_SPEED_MPS then
             print('CAWR_debug: automatically START recording')
             start_recording()
-            notify_recording_state_change()
+            force_show_ui_secs()
         end
     end
 end
@@ -479,6 +499,7 @@ initialize_datarefs()
 
 
 -------------------- FlyWithLua HOOKS --------------------
+do_every_frame('CAWR_on_every_frame()')
 do_every_draw('CAWR_on_every_draw()')
 do_on_mouse_click('CAWR_on_mouse_click()')
 do_sometimes('CAWR_do_sometimes()')
