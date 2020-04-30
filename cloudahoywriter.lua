@@ -12,7 +12,7 @@
 --  - Use simulator time in general (CAWR_flightTimeSec) and name vars
 --       as xSimTime. When real time (os.time()) is used, name vars as xOsTime.
 -----------------------------------------------
-local versionNum = '0.0.2'
+local versionNum = '0.0.3'
 
 require('graphics')
 
@@ -71,8 +71,9 @@ local function should_force_show_ui()
 end
 
 -- forward declarations
-local maybe_write_data 
+local maybe_write_data
 local automatic_recording_state_check
+local stop_recording
 
 -- Runs on every frame. Has full access to datarefs. May write to file.
 -- No drawing methods allowed.
@@ -80,6 +81,10 @@ function CAWR_on_every_frame()
     automatic_recording_state_check()
     maybe_write_data()
     forceShowUi = should_force_show_ui()
+end
+
+function CAWR_do_on_exit()
+    if is_recording() then stop_recording() end
 end
 -------------------- STATE --------------------
 
@@ -503,3 +508,4 @@ do_every_frame('CAWR_on_every_frame()')
 do_every_draw('CAWR_on_every_draw()')
 do_on_mouse_click('CAWR_on_mouse_click()')
 do_sometimes('CAWR_do_sometimes()')
+do_on_exit('CAWR_do_on_exit()')
