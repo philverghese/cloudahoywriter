@@ -6,8 +6,13 @@
 -- Code conventions
 --  - Use local when possible
 --  - Globals are prefixed with CAWR_
+--  - Method names use_underscores
+--  - Variable names useCamelCase
+--  - Constant names are CAPITAL_WITH_UNDERSCORE
+--  - Use simulator time in general (CAWR_flightTimeSec) and name vars
+--       as xSimTime. When real time (os.time()) is used, name vars as xOsTime.
 -----------------------------------------------
-local versionNum = '0.0.1'
+local versionNum = '0.0.2'
 
 require('graphics')
 
@@ -15,19 +20,69 @@ require('graphics')
 local LOG_INTERVAL_SECS = 0.3
 local SECONDS_PER_MINUTE = 60
 local SECONDS_PER_HOUR = SECONDS_PER_MINUTE * 60
+local NOTIFICATION_SECS = 10 -- Default time to show UI notifications
+
+-- Start or stop recording when ground speed crosses this speed.
+local AUTO_RECORDING_GROUND_SPEED_MPS = 3 -- Dataref is in m/s
+-- Stop recording when the ground speed has been below the speed above
+-- for more thsn this time.
+local AUTO_STOP_TIME_SECS = 10 * SECONDS_PER_MINUTE
+-- Disable automatic recording state change within this many seconds of the
+-- making a state change.
+local AUTO_RECORDING_DISABLE_SECS = 5 * SECONDS_PER_MINUTE
 local FLIGHTDATA_DIRECTORY_NAME = 'flightdata'
 local OUTPUT_PATH_NAME =  SYSTEM_DIRECTORY .. 'Output/' .. FLIGHTDATA_DIRECTORY_NAME
 
 -------------------- STATE --------------------
-local lastWriteTime = nil
+local lastWriteSimTime = nil
+-- Operating system time that recording started (real clock)
 local recordingStartOsTime = nil
+-- Flight time when recording started (pauses when sim pauses)
 local recordingStartSimTime = nil
-local recordingLuaRun = nil
 local recordingDisplayTime = '0:00:00'
+-- True if the UI should be forced to show
+local forceShowUi = false
+-- Time when the UI will no longer be forced to show.
+local forceShowUiSimTimeEnd = nil
+-- Time when groundspeed was low. Will stop once the AUTO_STOP_TIME_SECS elapses.
+local autoStopLowSpeedSimTime = nil
+-- Time when the user last changed recording state manually.
+-- No automatic changes until AUTO_RECORDING_DISABLE_SECS elapses
+local userRecordingStateChangeSimTime = nil
 
 local function is_recording()
     return recordingStartOsTime ~= nil
 end
+
+-- Force the UI to display for some seconds.
+local function force_show_ui_secs(secondsToShow)
+    secondsToShow = secondsToShow or NOTIFICATION_SECS
+    forceShowUiSimTimeEnd = CAWR_flightTimeSec + secondsToShow
+end
+
+-- Returns true if the UI should be forced on.
+local function should_force_show_ui()
+    if not forceShowUiSimTimeEnd then return false end
+    if CAWR_flightTimeSec > forceShowUiSimTimeEnd then
+        forceShowUiSimTimeEnd = nil
+        return false
+    end
+    return true
+end
+
+-- forward declarations
+local maybe_write_data 
+local automatic_recording_state_check
+
+-- Runs on every frame. Has full access to datarefs. May write to file.
+-- No drawing methods allowed.
+function CAWR_on_every_frame()
+    automatic_recording_state_check()
+    maybe_write_data()
+    forceShowUi = should_force_show_ui()
+end
+-------------------- STATE --------------------
+
 
 
 
@@ -81,13 +136,12 @@ local recOnG = 0.2
 local recOnB = 0.2
 local recOnA = 0.8
 
-local maybe_write_data -- forward declaration
-
--- Runs on every draw. May write to file. May show UI.
+-- Runs on every draw. Show UI when appropriate. Do not read or write datarefs.
+-- Put frequent dataref access in CAWR_on_every_frame().
 function CAWR_on_every_draw()
-    maybe_write_data()
-
-    if MOUSE_X > width * 3 then return end
+    if MOUSE_X > width * 3 and not forceShowUi then
+        return
+    end
 
     XPLMSetGraphicsState(0, 0, 0, 1, 1, 0, 0)
 
@@ -267,10 +321,10 @@ local dataTable = {
 
 local function initialize_datarefs()
     for i,v in ipairs(dataTable) do
+        -- Only register variables that start with our prefix. Some dataRefs
+        -- we want are already registered by FWL (e.g. ELEVATION, LATITUDE).
         if string.find(v.varName, 'CAWR_') then
-            -- Only register variables that start with our prefix. Some dataRefs
-            -- we want are already registered by FWL (e.g. ELEVATION, LATITUDE).
-            if not v.arrayIndex then 
+            if not v.arrayIndex then
                 DataRef(v.varName, v.dataRef)
             else
                 DataRef(v.varName, v.dataRef, "readonly", v.arrayIndex)
@@ -315,7 +369,6 @@ local function start_recording()
     -- writes the data after the header.
     recordingStartOsTime = startTime
     recordingStartSimTime = CAWR_flightTimeSec
-    recordingLuaRun = LUA_RUN -- Increments when aircraft or start position changes
 end
 
 local function stop_recording()
@@ -324,7 +377,8 @@ local function stop_recording()
     io.close()
 end
 
-local function toggle_recording_state()
+local function user_toggle_recording_state()
+    userRecordingStateChangeSimTime = CAWR_flightTimeSec
     if is_recording() then
         stop_recording()
     else
@@ -337,7 +391,7 @@ function CAWR_on_mouse_click()
     if MOUSE_X < x1 or MOUSE_X > x2 then return end
     if MOUSE_Y < y1 or MOUSE_Y > y2 then return end
     if MOUSE_STATUS == 'up' then
-        toggle_recording_state()
+        user_toggle_recording_state()
     end
 
     RESUME_MOUSE_CLICK = true -- consume click
@@ -347,11 +401,9 @@ end
 local function write_data()
     if not is_recording() then return end
 
-    -- TODO: Check for change in LUA_RUN and handle it.
+    -- TODO: Maybe handle big location change when the user manually repositions aircraft using map.
        -- Start a new recording if we're in the middle of one
        -- Reset time vars maybe
-       -- Maybe do the same type of handling for a big location change when the
-       --   user manually repositions the aircraft using the map.
 
     --TODO: Check sim/flightmodel2/misc/has_crashed to detect if the simulated
     --          airplane has had a simulated crash. Stop recording when that happens?
@@ -367,14 +419,52 @@ local function write_data()
     end
 end
 
--- Called from show_ui() on every draw. Keep this fast.
+-- Called from CAWR_on_every_frame. Keep this fast.
 function maybe_write_data()
     if not is_recording() then return end
-    if lastWriteTime and (os.clock() - lastWriteTime < LOG_INTERVAL_SECS) then return end
+    if lastWriteSimTime and (CAWR_flightTimeSec - lastWriteSimTime < LOG_INTERVAL_SECS) then return end
     write_data()
-    lastWriteTime = os.clock()
+    lastWriteSimTime = CAWR_flightTimeSec
 end
 
+-- Called from CAWR_on_every_frame. Keep this fast.
+-- Decides whether to automatically start or stop recording.
+function automatic_recording_state_check()
+    if CAWR_isPaused == 1 then return end
+
+    -- If we were counting down until automatically stopping, reset
+    -- the clock when the airplane moves again.
+    if CAWR_groundSpeed > AUTO_RECORDING_GROUND_SPEED_MPS then
+        autoStopLowSpeedSimTime = nil
+    end
+
+    local currentSimTime = CAWR_flightTimeSec
+    if userRecordingStateChangeSimTime
+        and currentSimTime < userRecordingStateChangeSimTime + AUTO_RECORDING_DISABLE_SECS then
+        -- Disable automatic state changes due to recent user action.
+        return
+    end
+    if is_recording() then
+        if CAWR_groundSpeed < AUTO_RECORDING_GROUND_SPEED_MPS then
+            autoStopLowSpeedSimTime = autoStopLowSpeedSimTime
+                or currentSimTime + AUTO_STOP_TIME_SECS
+            if currentSimTime > autoStopLowSpeedSimTime then
+                print('CAWR_debug: automatically stopping recording')
+                autoStopLowSpeedSimTime = nil
+                -- Update the total time string display before stopping
+                recordingDisplayTime = get_recording_display_time()
+                stop_recording()
+                force_show_ui_secs()
+            end
+        end
+    else -- not recording
+        if CAWR_groundSpeed > AUTO_RECORDING_GROUND_SPEED_MPS then
+            print('CAWR_debug: automatically START recording')
+            start_recording()
+            force_show_ui_secs()
+        end
+    end
+end
 
 -- Runs every 10 seconds
 function CAWR_do_sometimes()
@@ -409,6 +499,7 @@ initialize_datarefs()
 
 
 -------------------- FlyWithLua HOOKS --------------------
+do_every_frame('CAWR_on_every_frame()')
 do_every_draw('CAWR_on_every_draw()')
 do_on_mouse_click('CAWR_on_mouse_click()')
 do_sometimes('CAWR_do_sometimes()')
