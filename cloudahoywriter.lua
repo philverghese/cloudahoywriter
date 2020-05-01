@@ -12,9 +12,10 @@
 --  - Use simulator time in general (CAWR_flightTimeSec) and name vars
 --       as xSimTime. When real time (os.time()) is used, name vars as xOsTime.
 -----------------------------------------------
-local versionNum = '0.0.4'
+local versionNum = '0.0.5'
 
 require('graphics')
+require('math')
 
 -------------------- CONSTANTS --------------------
 local LOG_INTERVAL_SECS = 0.3
@@ -200,6 +201,17 @@ local function simTime_to_recordingTime(simTime)
     return simTime - recordingStartSimTime
 end
 
+-- Converts dots (in the range [-2.5, 2.5]) to a scale of [-1, 1].
+local function dots_to_ones(dots)
+    --  Some instruments give +3 or -3 dots for needle not visible.
+    if dots > 0 then
+        dots = math.min(dots, 2.5)
+    else
+        dots = math.max(dots, -2.5)
+    end
+    return dots / 2.5
+end
+
 -- Data Table
 --   Structure
 --      - csvField: name of CloudAhoy CSV field
@@ -315,8 +327,18 @@ local dataTable = {
         varName='CAWR_manPres1',
     },
     -- TODO: Support multi-engine w/ RPM & MAP
-
-    -- TODO: Add CDI fields fsd/HCDI, fsd/VCDI
+    {
+        csvField='fsd/HCDI',
+        dataRef='sim/cockpit2/radios/indicators/hsi_hdef_dots_pilot',
+        varName='CAWR_HCDI',
+        conversion=dots_to_ones,
+    },
+    {
+        csvField='fsd/VCDI',
+        dataRef='sim/cockpit2/radios/indicators/hsi_vdef_dots_pilot',
+        varName='CAWR_VCDI',
+        conversion=dots_to_ones,
+    },
 }
 
 local function initialize_datarefs()
@@ -397,6 +419,17 @@ function CAWR_on_mouse_click()
     RESUME_MOUSE_CLICK = true -- consume click
 end
 
+-- Avoid logging crazy numbers like -3.3631163143796e-045 by
+-- only having a fixed number of digits after the decimal.
+local PRECISION_CONSTANT = 1000000
+local function reduce_precision(value)
+    if (value >= 0) then
+        return math.floor(value * PRECISION_CONSTANT) / PRECISION_CONSTANT
+    else
+        return math.ceil(value * PRECISION_CONSTANT) / PRECISION_CONSTANT
+    end
+end
+
 -- Writes to output file. 
 local function write_data()
     if not is_recording() then return end
@@ -414,7 +447,7 @@ local function write_data()
         if i == #dataTable then trailingChar = '\n' end
         local dataValue = _G[v.varName] or 0
         if v.conversion then dataValue = v.conversion(dataValue) end
-        io.write(dataValue)
+        io.write(reduce_precision(dataValue))
         io.write(trailingChar)
     end
 end
