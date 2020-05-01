@@ -12,7 +12,7 @@
 --  - Use simulator time in general (CAWR_flightTimeSec) and name vars
 --       as xSimTime. When real time (os.time()) is used, name vars as xOsTime.
 -----------------------------------------------
-local versionNum = '0.0.3'
+local versionNum = '0.0.4'
 
 require('graphics')
 
@@ -261,11 +261,6 @@ local dataTable = {
         csvField='degrees/TRK',
         dataRef='sim/cockpit2/gauges/indicators/ground_track_mag_pilot',
         varName='CAWR_degreesTrack',
-    },
-    {
-        csvField='degrees/MagVar',
-        dataRef='sim/flightmodel/position/magnetic_variation',
-        varName='CAWR_magVar',
     },
     {
         csvField='degrees/WndDr',
