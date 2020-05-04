@@ -12,7 +12,12 @@
 --  - Use simulator time in general (CAWR_flightTimeSec) and name vars
 --       as xSimTime. When real time (os.time()) is used, name vars as xOsTime.
 -----------------------------------------------
-local versionNum = '0.0.5'
+local versionNum = '0.0.6'
+
+if not SUPPORTS_FLOATING_WINDOWS then
+    logMsg('Please update your FlyWithLua to the latest version')
+    return
+end
 
 require('graphics')
 require('math')
@@ -33,6 +38,7 @@ local AUTO_STOP_TIME_SECS = 10 * SECONDS_PER_MINUTE
 local AUTO_RECORDING_DISABLE_SECS = 5 * SECONDS_PER_MINUTE
 local FLIGHTDATA_DIRECTORY_NAME = 'cloudahoywriter'
 local OUTPUT_PATH_NAME =  SYSTEM_DIRECTORY .. 'Output/' .. FLIGHTDATA_DIRECTORY_NAME
+local PREFERENCES_FILE_NAME = SCRIPT_DIRECTORY .. 'cloudahoywriter.ini'
 
 -------------------- STATE --------------------
 local lastWriteSimTime = nil
@@ -50,6 +56,13 @@ local autoStopLowSpeedSimTime = nil
 -- Time when the user last changed recording state manually.
 -- No automatic changes until AUTO_RECORDING_DISABLE_SECS elapses
 local userRecordingStateChangeSimTime = nil
+
+-- User Settings
+local pilotName = ''
+local tailNumber = ''
+local autoRecordEnable = true
+local userForceShowUi = false
+local developerModeEnable = false
 
 local function is_recording()
     return recordingStartOsTime ~= nil
@@ -92,11 +105,72 @@ end
 
 
 
+-------------------- PREFERENCES FILE --------------------
+local PREF_PILOT_NAME = 'PilotName'
+local PREF_TAIL_NUMBER = 'TailNumber'
+local PREF_AUTO_RECORD = 'AutoRecordEnable'
+local PREF_FORCE_UI = 'AlwaysShowUi'
+local PREF_DEVELOPER_MODE = 'DeveloperMode'
+
+local function read_preferences()
+    local prefFile = io.open(PREFERENCES_FILE_NAME, 'r')
+    if not prefFile then
+        print('Unable to read ' .. PREFERENCES_FILE_NAME)
+        return
+    end
+    local pos
+    local param
+    local value
+    for line in prefFile:lines() do
+        -- Start at char 2, true=plain text
+        pos = string.find(line, '=', 2, true)
+        if pos then
+            param = string.sub(line, 1, pos - 1)
+            value = string.sub(line, pos + 1)
+            if param == PREF_PILOT_NAME then pilotName = value end
+            if param == PREF_TAIL_NUMBER then tailNumber = value end
+            if param == PREF_AUTO_RECORD then autoRecordEnable = (value == 'true') end
+            if param == PREF_FORCE_UI then userForceShowUi = (value == 'true') end
+            if param == PREF_DEVELOPER_MODE then developerModeEnable = (value == 'true') end
+        end
+    end
+    prefFile:close()
+end
+
+local function write_pref_param(file, name, value)
+    file:write(name .. '=' .. tostring(value) .. '\n')
+end
+
+local function write_preferences()
+    local prefFile = io.open(PREFERENCES_FILE_NAME, 'w')
+    if not prefFile then
+        print('Unable to save perferences to ' .. PREFERENCES_FILE_NAME)
+        return
+    end
+    prefFile:write('# Preferences for CloudAhoy Writer\n')
+    if pilotName and pilotName ~= '' then
+        write_pref_param(prefFile, PREF_PILOT_NAME, pilotName)
+    end
+    if tailNumber and tailNumber ~= '' then
+        write_pref_param(prefFile, PREF_TAIL_NUMBER, tailNumber)
+    end
+    write_pref_param(prefFile, PREF_AUTO_RECORD, (autoRecordEnable == true))
+    write_pref_param(prefFile, PREF_FORCE_UI, (userForceShowUi == true))
+    write_pref_param(prefFile, PREF_DEVELOPER_MODE, (developerModeEnable == true))
+    prefFile:close()
+end
+
+-------------------- PREFERENCES FILE -------------------
+
+
+
+
 -------------------- UI --------------------
 -- Bounds for control box
 local width = measure_string('X9:99:99X')
 local height = 90
 local cawrWidth = measure_string('CAWR')
+local cawrDividerHeight = 30
 local x1 = 0
 local x2 = x1 + width
 local y1 = (SCREEN_HIGHT / 2) - 50
@@ -145,7 +219,7 @@ local recOnA = 0.8
 -- Runs on every draw. Show UI when appropriate. Do not read or write datarefs.
 -- Put frequent dataref access in CAWR_on_every_frame().
 function CAWR_on_every_draw()
-    if MOUSE_X > width * 3 and not forceShowUi then
+    if MOUSE_X > width * 3 and not (userForceShowUi or forceShowUi) then
         return
     end
 
@@ -160,7 +234,7 @@ function CAWR_on_every_draw()
     draw_string(centerX - (cawrWidth / 2), y2 - 16, 'CAWR')
     graphics.set_width(2)
     graphics.draw_line(x1, y2, x2, y2)
-    graphics.draw_line(x1, y2 - 30, x2, y2 - 30)
+    graphics.draw_line(x1, y2 - cawrDividerHeight, x2, y2 - cawrDividerHeight)
     graphics.draw_line(x1 + 1, y2, x1 + 1, y1)
     graphics.draw_line(x2, y2, x2, y1)
     graphics.draw_line(x1, y1, x2, y1)
@@ -179,6 +253,53 @@ function CAWR_on_every_draw()
     -- Recording time
     draw_string(centerX - (measure_string(recordingDisplayTime) / 2),
         y1 + 10, recordingDisplayTime)
+end
+
+-- Settings window
+local settingsWindow = nil
+
+local function show_settings_ui()
+    read_preferences()
+    settingsWindow = float_wnd_create(300, 150, 1, true)
+    float_wnd_set_position(settingsWindow, x2 + width + 20, y2 - 200)
+    float_wnd_set_title(settingsWindow, 'CloudAhoy Writer Settings')
+    float_wnd_set_imgui_builder(settingsWindow, 'CAWR_settings_window_builder')
+    float_wnd_set_onclose(settingsWindow, 'CAWR_settings_onclose')
+end
+
+local function toggle_settings_ui()
+    if settingsWindow then
+        float_wnd_destroy(settingsWindow)
+        settingsWindow = nil
+    else
+        show_settings_ui()
+    end
+end
+
+function CAWR_settings_onclose()
+    settingsWindow = nil
+    write_preferences()
+end
+
+function CAWR_settings_window_builder()
+    -- imgui puts the labels on the right, and it awkward to fix
+    -- https://github.com/ocornut/imgui/wiki
+    -- https://github.com/libigl/libigl/issues/1300
+    local pilotChanged, newPilot = imgui.InputText('Pilot Name', pilotName, 30)
+    local tailChanged, newTail = imgui.InputText('Tail number', tailNumber, 30)
+    if pilotChanged then pilotName = newPilot end
+    if tailChanged then tailNumber = newTail end
+
+    imgui.Separator()
+    local autoRecChanged, newAutoRec =
+        imgui.Checkbox('Automatic recording', autoRecordEnable)
+    local alwaysShowChanged, newAlwaysShow =
+        imgui.Checkbox('Always show UI', userForceShowUi)
+    local developerModeChanged, newDevMode =
+        imgui.Checkbox('Developer mode', developerModeEnable)
+    if autoRecChanged then autoRecordEnable = newAutoRec end
+    if alwaysShowChanged then userForceShowUi = newAlwaysShow end
+    if developerModeChanged then developerModeEnable = newDevMode end
 end
 -------------------- UI --------------------
 
@@ -367,7 +488,14 @@ local function write_csv_header(startTime)
     -- Metadata
     io.write('Metadata,CA_CSV.3\n')
     io.write(string.format('GMT,%d\n', startTime))
-    io.write('TAIL,UNKNOWN\n') -- TODO: Allow user entry
+    if pilotName and pilotName ~= '' then
+        io.write(string.format('PILOT,%s\n', pilotName))
+    end
+    if not tailNumber or tailNumber == '' then
+        io.write('TAIL,UNKNOWN\n')
+    else
+        io.write(string.format('TAIL,%s\n',  tailNumber))
+    end
     io.write(string.format('GPS,X-Plane CloudAhoy Writer %s\n', versionNum))
     io.write('ISSIM,1\n')
     io.write('DATA,\n')
@@ -415,7 +543,12 @@ function CAWR_on_mouse_click()
     if MOUSE_X < x1 or MOUSE_X > x2 then return end
     if MOUSE_Y < y1 or MOUSE_Y > y2 then return end
     if MOUSE_STATUS == 'up' then
-        user_toggle_recording_state()
+        if MOUSE_Y > y2 - cawrDividerHeight then
+            -- User clicked in the CAWR area at the top
+            toggle_settings_ui()
+        else
+            user_toggle_recording_state()
+        end
     end
 
     RESUME_MOUSE_CLICK = true -- consume click
@@ -465,6 +598,7 @@ end
 -- Called from CAWR_on_every_frame. Keep this fast.
 -- Decides whether to automatically start or stop recording.
 function automatic_recording_state_check()
+    if not autoRecordEnable then return end
     if CAWR_isPaused == 1 then return end
 
     -- If we were counting down until automatically stopping, reset
@@ -529,6 +663,7 @@ end
 -------------------- MAIN --------------------
 create_output_directory()
 initialize_datarefs()
+read_preferences()
 
 
 

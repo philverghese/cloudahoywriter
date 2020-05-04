@@ -1,5 +1,5 @@
 ## About This Plugin
-This plugin records data from your X-Plane flight to a CSV file that's ready to import into [CloudAhoy](https://www.cloudahoy.com/). 
+This plugin records data from your X-Plane flight to a CSV file that's ready to import into [CloudAhoy](https://www.cloudahoy.com/).
 
 ## Installation
 1. Install [Fly With Lua NG](https://forums.x-plane.org/index.php?/files/file/38445-flywithlua-ng-next-generation-edition-for-x-plane-11-win-lin-mac/).
@@ -19,9 +19,13 @@ If you installed correctly, move your mouse to the left edge of the X-Plane wind
 * Automatic recording start or stop is disabled for about 5 minutes after you manually start or stop recording (see below).
 
 ### Manually starting and stopping recording
-* You can manually start and stop recording by clicking on the CAWR UI window.
+* You can manually start and stop recording by clicking on the recording circle in the CAWR UI window.
 * The litte circle turns red when recording, and the counter starts incrementing to show you how long the recording is.
-* Tap the CAWR UI again to stop recording.
+* Tap the recording circle again to stop recording.
+
+### Settings
+* Access the Settings screen by tapping on the letters CAWR at the top of the pop up UI.
+* Set your name and tail number which is recorded in the file you'll upload to CloudAhoy.
 
 ## Uploading recording to CloudAhoy
 * After you stop recording, the data will be in your `X-Plane 11\Output\cloudahoywriter` directory as a `.CSV` file.
