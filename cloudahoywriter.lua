@@ -31,7 +31,7 @@ local AUTO_STOP_TIME_SECS = 10 * SECONDS_PER_MINUTE
 -- Disable automatic recording state change within this many seconds of the
 -- making a state change.
 local AUTO_RECORDING_DISABLE_SECS = 5 * SECONDS_PER_MINUTE
-local FLIGHTDATA_DIRECTORY_NAME = 'flightdata'
+local FLIGHTDATA_DIRECTORY_NAME = 'cloudahoywriter'
 local OUTPUT_PATH_NAME =  SYSTEM_DIRECTORY .. 'Output/' .. FLIGHTDATA_DIRECTORY_NAME
 
 -------------------- STATE --------------------
