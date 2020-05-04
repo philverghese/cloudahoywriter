@@ -314,6 +314,7 @@ local dataTable = {
         csvField='down/gear',
         dataRef='sim/flightmodel2/gear/deploy_ratio',
         varName='CAWR_gearDown',
+        arrayIndex=0,
     },
     {
         csvField='rpm/E1 RPM',
@@ -325,6 +326,7 @@ local dataTable = {
         csvField='in hg/E1 MAP',
         dataRef='sim/cockpit2/engine/indicators/MPR_in_hg',
         varName='CAWR_manPres1',
+        arrayIndex=0,
     },
     -- TODO: Support multi-engine w/ RPM & MAP
     {
@@ -430,7 +432,7 @@ local function reduce_precision(value)
     end
 end
 
--- Writes to output file. 
+-- Writes to output file.
 local function write_data()
     if not is_recording() then return end
 
