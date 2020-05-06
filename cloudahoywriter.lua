@@ -282,7 +282,8 @@ function CAWR_settings_onclose()
 end
 
 function CAWR_settings_window_builder()
-    -- imgui puts the labels on the right, and it awkward to fix
+    -- TODO(issue #21): Move input text labels to the left
+    -- imgui puts the labels on the right, and is awkward to fix
     -- https://github.com/ocornut/imgui/wiki
     -- https://github.com/libigl/libigl/issues/1300
     local pilotChanged, newPilot = imgui.InputText('Pilot Name', pilotName, 30)
@@ -568,13 +569,6 @@ end
 -- Writes to output file.
 local function write_data()
     if not is_recording() then return end
-
-    -- TODO: Maybe handle big location change when the user manually repositions aircraft using map.
-       -- Start a new recording if we're in the middle of one
-       -- Reset time vars maybe
-
-    --TODO: Check sim/flightmodel2/misc/has_crashed to detect if the simulated
-    --          airplane has had a simulated crash. Stop recording when that happens?
     if CAWR_isPaused == 1 then return end
 
     local trailingChar = ','
@@ -590,6 +584,12 @@ end
 -- Called from CAWR_on_every_frame. Keep this fast.
 function maybe_write_data()
     if not is_recording() then return end
+    -- TODO(issue #22): Handle big location change when the user manually repositions aircraft using map.
+       -- Start a new recording if we're in the middle of one
+
+    --TODO(issue #23): Check sim/flightmodel2/misc/has_crashed to detect if the simulated
+    --          airplane has had a simulated crash. Stop recording when that happens.
+
     if lastWriteSimTime and (CAWR_flightTimeSec - lastWriteSimTime < LOG_INTERVAL_SECS) then return end
     write_data()
     lastWriteSimTime = CAWR_flightTimeSec
