@@ -12,7 +12,7 @@
 --  - Use simulator time in general (CAWR_flightTimeSec) and name vars
 --       as xSimTime. When real time (os.time()) is used, name vars as xOsTime.
 -----------------------------------------------
-local versionNum = '0.0.6'
+local versionNum = '0.0.7'
 
 if not SUPPORTS_FLOATING_WINDOWS then
     logMsg('Please update your FlyWithLua to the latest version')
@@ -497,6 +497,7 @@ local function write_csv_header(startTime)
     else
         io.write(string.format('TAIL,%s\n',  tailNumber))
     end
+    io.write(string.format('AIRCRAFT_TYPE,%s\n', PLANE_ICAO))
     io.write(string.format('GPS,X-Plane CloudAhoy Writer %s\n', versionNum))
     io.write('ISSIM,1\n')
     io.write('DATA,\n')
