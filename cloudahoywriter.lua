@@ -12,7 +12,7 @@
 --  - Use simulator time in general (CAWR_flightTimeSec) and name vars
 --       as xSimTime. When real time (os.time()) is used, name vars as xOsTime.
 -----------------------------------------------
-local versionNum = '0.0.7'
+local versionNum = '0.0.8'
 
 if not SUPPORTS_FLOATING_WINDOWS then
     logMsg('Please update your FlyWithLua to the latest version')
@@ -309,11 +309,11 @@ end
 
 -------------------- X-PLANE DATA  --------------------
 local function meters_to_feet(meters)
-    return meters * 3.281
+    return meters * 3.28084
 end
 
 local function mps_to_knots(mps)
-    return mps * 1.944
+    return mps * 1.94384
 end
 
 -- Converts sim/time/total_flight_time_sec to a time that's relative
@@ -332,6 +332,11 @@ local function dots_to_ones(dots)
         dots = math.max(dots, -2.5)
     end
     return dots / 2.5
+end
+
+-- Changes a positive to a negative and vice-versa.
+local function change_sign(number )
+    return -1 * number
 end
 
 -- Data Table
@@ -397,14 +402,21 @@ local dataTable = {
         varName='CAWR_degreesTrack',
     },
     {
+        csvField='degrees/MagVar',
+        dataRef='sim/flightmodel/position/magnetic_variation',
+        varName='CAWR_magneticVar',
+        -- X-Plane uses negative values for east variation. CloudAhoy wants the opposite.
+        conversion=change_sign,
+    },
+    {
         csvField='degrees/WndDr',
-        dataRef='sim/weather/wind_direction_degt',
-        varName='CAWR_windDirection',
+        dataRef='sim/cockpit2/gauges/indicators/wind_heading_deg_mag',
+        varName='CAWR_windDirectionMag',
     },
     {
         csvField='knots/WndSpd',
-        dataRef='sim/weather/wind_speed_kt',
-        varName='CAWR_windSpeed',
+        dataRef='sim/cockpit2/gauges/indicators/wind_speed_kts',
+        varName='CAWR_windSpeedKts',
     },
     {
         csvField='degrees/Pitch',
@@ -473,7 +485,7 @@ local function initialize_datarefs()
             if not v.arrayIndex then
                 DataRef(v.varName, v.dataRef)
             else
-                DataRef(v.varName, v.dataRef, "readonly", v.arrayIndex)
+                DataRef(v.varName, v.dataRef, 'readonly', v.arrayIndex)
             end
         end
     end
