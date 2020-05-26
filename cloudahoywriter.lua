@@ -12,7 +12,7 @@
 --  - Use simulator time in general (CAWR_flightTimeSec) and name vars
 --       as xSimTime. When real time (os.time()) is used, name vars as xOsTime.
 -----------------------------------------------
-local versionNum = '0.0.8'
+local versionNum = '0.0.9'
 
 if not SUPPORTS_FLOATING_WINDOWS then
     logMsg('Please update your FlyWithLua to the latest version')
@@ -323,14 +323,38 @@ local function simTime_to_recordingTime(simTime)
     return simTime - recordingStartSimTime
 end
 
--- Converts dots (in the range [-2.5, 2.5]) to a scale of [-1, 1].
-local function dots_to_ones(dots)
-    --  Some instruments give +3 or -3 dots for needle not visible.
-    if dots > 0 then
-        dots = math.min(dots, 2.5)
-    else
-        dots = math.max(dots, -2.5)
+-- Converts dots(in the range [-2.5, 2.5]) to a scale of [-1, 1].
+-- Positive values are a right needle.
+-- If the horizontal navigation flag is set, or the input is outside the range
+-- [-2.5, 2.5], then returned value will be either 1.25 or -1.25.
+local function horizontal_cdi(dots)
+    if dots > 2.5 then return 1.25 end
+    if dots < -2.5 then return -1.25 end
+
+    if CAWR_horizontalFlagEnum == 0 then
+        -- enum value 0 means the "off" flag is set.
+        if dots >= 0 then return 1.25 else return -1.25 end
     end
+
+    -- If we made it this far, it's a valid horizontal needle.
+    return dots / 2.5
+end
+
+-- Converts dots(in the range [-2.5, 2.5]) to a scale of [-1, 1].
+-- Positive values are a down needle.
+-- If the vertical navigation flag is set, or the input is outside the range
+-- [-2.5, 2.5], then returned value will be either 1.25 or -1.25.
+local function vertical_cdi(dots)
+    if dots > 2.5 then return 1.25 end
+    if dots < -2.5 then return -1.25 end
+
+    if CAWR_verticalFlagBool == 1 then
+        -- value 1 means there should be vertical nav, but its not received.
+        -- Returning -1.25 for "off" matches what Garmin does.
+        if dots > 0 then return 1.25 else return -1.25 end
+    end
+
+    -- If we made it this far, it's a valid vertical needle.
     return dots / 2.5
 end
 
@@ -467,13 +491,13 @@ local dataTable = {
         csvField='fsd/HCDI',
         dataRef='sim/cockpit2/radios/indicators/hsi_hdef_dots_pilot',
         varName='CAWR_HCDI',
-        conversion=dots_to_ones,
+        conversion=horizontal_cdi,
     },
     {
         csvField='fsd/VCDI',
         dataRef='sim/cockpit2/radios/indicators/hsi_vdef_dots_pilot',
         varName='CAWR_VCDI',
-        conversion=dots_to_ones,
+        conversion=vertical_cdi,
     },
 }
 
@@ -491,6 +515,8 @@ local function initialize_datarefs()
     end
 
     DataRef('CAWR_isPaused','sim/time/paused')
+    DataRef('CAWR_horizontalFlagEnum', 'sim/cockpit2/radios/indicators/hsi_flag_from_to_pilot')
+    DataRef('CAWR_verticalFlagBool', 'sim/cockpit2/radios/indicators/hsi_flag_glideslope_pilot_mech')
 end
 -------------------- X-PLANE DATA  --------------------
 
