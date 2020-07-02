@@ -12,7 +12,7 @@
 --  - Use simulator time in general (CAWR_flightTimeSec) and name vars
 --       as xSimTime. When real time (os.time()) is used, name vars as xOsTime.
 -----------------------------------------------
-local versionNum = '0.0.9'
+local versionNum = '0.0.10'
 
 if not SUPPORTS_FLOATING_WINDOWS then
     logMsg('Please update your FlyWithLua to the latest version')
@@ -144,7 +144,7 @@ end
 local function write_preferences()
     local prefFile = io.open(PREFERENCES_FILE_NAME, 'w')
     if not prefFile then
-        print('Unable to save perferences to ' .. PREFERENCES_FILE_NAME)
+        print('Unable to save preferences to ' .. PREFERENCES_FILE_NAME)
         return
     end
     prefFile:write('# Preferences for CloudAhoy Writer\n')
@@ -326,14 +326,13 @@ end
 -- Converts dots(in the range [-2.5, 2.5]) to a scale of [-1, 1].
 -- Positive values are a right needle.
 -- If the horizontal navigation flag is set, or the input is outside the range
--- [-2.5, 2.5], then returned value will be either 1.25 or -1.25.
+-- [-2.5, 2.5], then returned value will be nil.
 local function horizontal_cdi(dots)
-    if dots > 2.5 then return 1.25 end
-    if dots < -2.5 then return -1.25 end
-
-    if CAWR_horizontalFlagEnum == 0 then
+    if CAWR_horizontalFlagEnum == 0
         -- enum value 0 means the "off" flag is set.
-        if dots >= 0 then return 1.25 else return -1.25 end
+        or dots > 2.51 or dots < -2.51 then
+            -- dot values get a bit noisy right around 2.5
+            return nil
     end
 
     -- If we made it this far, it's a valid horizontal needle.
@@ -343,15 +342,13 @@ end
 -- Converts dots(in the range [-2.5, 2.5]) to a scale of [-1, 1].
 -- Positive values are a down needle.
 -- If the vertical navigation flag is set, or the input is outside the range
--- [-2.5, 2.5], then returned value will be either 1.25 or -1.25.
+-- [-2.5, 2.5], then returned value will be nil.
 local function vertical_cdi(dots)
-    if dots > 2.5 then return 1.25 end
-    if dots < -2.5 then return -1.25 end
-
-    if CAWR_verticalFlagBool == 1 then
-        -- value 1 means there should be vertical nav, but its not received.
-        -- Returning -1.25 for "off" matches what Garmin does.
-        if dots > 0 then return 1.25 else return -1.25 end
+    if CAWR_verticalFlagBool == 1
+        -- 1 means vertical nav should exist, but its not received.
+        or dots > 2.51 or dots < -2.51 then
+            -- dot values get a bit noisy right around 2.5
+            return nil
     end
 
     -- If we made it this far, it's a valid vertical needle.
@@ -596,8 +593,10 @@ end
 
 -- Avoid logging crazy numbers like -3.3631163143796e-045 by
 -- only having a fixed number of digits after the decimal.
-local PRECISION_CONSTANT = 1000000
-local function reduce_precision(value)
+-- Return the empty string for nil.
+local PRECISION_CONSTANT = 10000
+local function normalize_data(value)
+    if value == nil then return '' end
     if (value >= 0) then
         return math.floor(value * PRECISION_CONSTANT) / PRECISION_CONSTANT
     else
@@ -615,7 +614,7 @@ local function write_data()
         if i == #dataTable then trailingChar = '\n' end
         local dataValue = _G[v.varName] or 0
         if v.conversion then dataValue = v.conversion(dataValue) end
-        io.write(reduce_precision(dataValue))
+        io.write(normalize_data(dataValue))
         io.write(trailingChar)
     end
 end
